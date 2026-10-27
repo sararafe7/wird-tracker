@@ -1,25 +1,22 @@
 # ─────────────────────────────────────────────────────────────
-# Hasanat App — Cloudflare Pages Configuration
+# Wird — Cloudflare Pages configuration (Hasanat account)
 # ─────────────────────────────────────────────────────────────
 
-name = "your-app-name"
+name = "wird"
 compatibility_date = "2025-12-01"
 pages_build_output_dir = "./dist"
 
-# ─────────────────────────────────────────────────────────────
-# D1 Database
-# Create with: npx wrangler d1 create your-app-db
-# Then update the database_id below
-# ─────────────────────────────────────────────────────────────
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "your-app-db"
-# database_id = "<your-database-id>"
+# D1 database requested from Hasanat. Replace database_id with the id
+# the maintainers send in the request note (it is not a secret).
+# Local development works with the placeholder.
+[[d1_databases]]
+binding = "DB"
+database_name = "wird-db"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
 
-# ─────────────────────────────────────────────────────────────
-# Environment Variables
-# For secrets: npx wrangler pages secret put SECRET_NAME
-# ─────────────────────────────────────────────────────────────
-# [vars]
-# PUBLIC_SITE_URL = "https://yourapp.hasanat.dev"
-# PUBLIC_APP_NAME = "Your App Name"
+[vars]
+PUBLIC_SITE_URL = "https://wird.hasanat.dev"
+PUBLIC_APP_NAME = "وِرد"
+# Comma-separated emails that sign in as supervisor
+SUPERVISOR_EMAILS = ""

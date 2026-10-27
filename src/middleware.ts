@@ -1,24 +1,38 @@
 import { defineMiddleware } from "astro:middleware";
 
+/** Local-only stand-in for sign-in, set by the "who are you" switch */
+export const DEV_EMAIL_COOKIE = "wird_dev_email";
+
 /**
  * Auth middleware — verifies sessions via auth.hasanat.dev.
  *
- * For Cloudflare-hosted apps: uses the shared .hasanat.dev session cookie.
- * For external apps: use the OAuth flow instead (see .github/skills/hasanat-auth/).
+ * Uses the shared .hasanat.dev session cookie, so sign-in only works on *.hasanat.dev.
+ * In development, the wird_dev_email cookie pretends to be that signed-in email instead;
+ * import.meta.env.DEV is false in production builds, so that branch is removed there.
  */
 export const onRequest = defineMiddleware(async (context, next) => {
+  context.locals.user = null;
   const cookie = context.request.headers.get("cookie") || "";
 
   // Check auth for API routes and protected pages
   const needsAuth =
     context.url.pathname.startsWith("/api/") || context.url.pathname.includes("/dashboard");
 
+  if (import.meta.env.DEV) {
+    const devEmail = context.cookies.get(DEV_EMAIL_COOKIE)?.value;
+    if (needsAuth && devEmail) {
+      context.locals.user = {
+        id: `dev:${devEmail}`,
+        name: devEmail.split("@")[0],
+        email: devEmail,
+      };
+    }
+    return next();
+  }
+
   if (needsAuth && cookie.includes("authjs.session-token")) {
     try {
-      const authUrl =
-        context.url.hostname === "localhost" ? "http://localhost:8788" : "https://auth.hasanat.dev";
-
-      const res = await fetch(`${authUrl}/api/auth/session`, {
+      const res = await fetch("https://auth.hasanat.dev/api/auth/session", {
         headers: { cookie },
       });
 
@@ -27,15 +41,13 @@ export const onRequest = defineMiddleware(async (context, next) => {
         if (session?.user) {
           context.locals.user = session.user;
         }
+      } else {
+        console.error("[wird] auth session check failed:", res.status);
       }
-    } catch {
+    } catch (error) {
       // Auth service unreachable — continue without user
+      console.error("[wird] auth service unreachable:", error);
     }
-  }
-
-  // Default: no user
-  if (!context.locals.user) {
-    context.locals.user = null;
   }
 
   return next();

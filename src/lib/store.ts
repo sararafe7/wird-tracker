@@ -1,10 +1,8 @@
-import { reportError } from "@/lib/errors";
-import { newId } from "@/lib/id";
 import type { Member, WirdRecord } from "@/lib/wird";
 
 /**
- * Local data store. The shapes mirror the planned D1 tables
- * (staff, groups, members, records, marks) so the move online is a storage swap.
+ * App data as the server sends it, mirroring the D1 tables
+ * (staff, groups, members, records, marks), limited to what the signed-in user may see.
  */
 
 export type Role = "supervisor" | "manager";
@@ -13,6 +11,8 @@ export interface Staff {
   id: string;
   name: string;
   role: Role;
+  email: string;
+  linked: boolean; // has signed in at least once
 }
 
 export interface Group {
@@ -31,86 +31,16 @@ export interface Mark {
 }
 
 export interface Data {
-  staff: Staff[];
+  me: Staff;
+  staff: Staff[]; // managers the user may see (all for the supervisor, herself for a manager)
   groups: Group[];
   members: Member[]; // array order is the numbering order within each group
   records: WirdRecord[];
   marks: Mark[];
-  actingAs: string; // local stand-in for the signed-in user until shared sign-in
 }
 
-const STORAGE_KEY = "wird.data.v3";
-const V2_KEY = "wird.data.v2";
-
-const SUPERVISOR: Staff = { id: "supervisor", name: "المشرفة", role: "supervisor" };
-
-export function emptyData(): Data {
-  return {
-    staff: [SUPERVISOR],
-    groups: [],
-    members: [],
-    records: [],
-    marks: [],
-    actingAs: SUPERVISOR.id,
-  };
-}
-
-type V2Member = Omit<Member, "groupId">;
-
-/** Earlier single-group data becomes one group with its own manager */
-function fromV2(raw: string): Data {
-  const v2 = JSON.parse(raw) as { members: V2Member[]; records: WirdRecord[] };
-  const data = emptyData();
-  if (v2.members.length === 0) return data;
-  const manager: Staff = { id: newId(), name: "المسؤولة", role: "manager" };
-  const group: Group = { id: newId(), name: "مجموعتي", managerId: manager.id };
-  return {
-    ...data,
-    staff: [...data.staff, manager],
-    groups: [group],
-    members: v2.members.map((m) => ({ ...m, groupId: group.id })),
-    records: v2.records,
-    actingAs: manager.id,
-  };
-}
-
-export function load(): Data {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...emptyData(), ...(JSON.parse(raw) as Partial<Data>) };
-    const v2 = localStorage.getItem(V2_KEY);
-    if (!v2) return emptyData();
-    // Save at once so the generated group and manager ids stay stable across reloads
-    const migrated = fromV2(v2);
-    save(migrated);
-    return migrated;
-  } catch (error) {
-    reportError("load", error);
-    // Keep the unreadable data aside so the next save cannot destroy it
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) localStorage.setItem(`${STORAGE_KEY}.unreadable`, raw);
-    } catch {
-      // Storage itself is unavailable; already reported above
-    }
-    return emptyData();
-  }
-}
-
-/** Returns false (after reporting) when the browser refuses to store the data */
-export function save(data: Data): boolean {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    return true;
-  } catch (error) {
-    reportError("save", error);
-    return false;
-  }
-}
-
-export function currentUser(data: Data): Staff {
-  return data.staff.find((s) => s.id === data.actingAs) ?? SUPERVISOR;
-}
+/** Supervisors are not stored in D1; they all share this id */
+export const SUPERVISOR_ID = "supervisor";
 
 export function canSeeGroup(user: Staff, group: Group): boolean {
   return user.role === "supervisor" || group.managerId === user.id;
@@ -122,8 +52,7 @@ export function canManageMembers(user: Staff, group: Group): boolean {
 }
 
 export function visibleGroups(data: Data): Group[] {
-  const user = currentUser(data);
-  return data.groups.filter((g) => canSeeGroup(user, g));
+  return data.groups.filter((g) => canSeeGroup(data.me, g));
 }
 
 export function groupMembers(data: Data, groupId: string): Member[] {
@@ -146,20 +75,25 @@ export function hasMark(marks: Mark[], memberId: string, date: string, kind: Mar
   return marks.some((k) => k.memberId === memberId && k.date === date && k.kind === kind);
 }
 
-export function toggleMark(marks: Mark[], memberId: string, date: string, kind: MarkKind): Mark[] {
-  return hasMark(marks, memberId, date, kind)
-    ? marks.filter((k) => !(k.memberId === memberId && k.date === date && k.kind === kind))
-    : [...marks, { memberId, date, kind }];
+export function setMark(
+  marks: Mark[],
+  memberId: string,
+  date: string,
+  kind: MarkKind,
+  on: boolean,
+): Mark[] {
+  const rest = marks.filter(
+    (k) => !(k.memberId === memberId && k.date === date && k.kind === kind),
+  );
+  return on ? [...rest, { memberId, date, kind }] : rest;
 }
 
-/** Remove a group with its members and their history */
-export function deleteGroup(data: Data, groupId: string): Data {
-  const gone = new Set(groupMembers(data, groupId).map((m) => m.id));
+/** Remove members with their history */
+export function withoutMembers(data: Data, ids: Set<string>): Data {
   return {
     ...data,
-    groups: data.groups.filter((g) => g.id !== groupId),
-    members: data.members.filter((m) => !gone.has(m.id)),
-    records: data.records.filter((r) => !gone.has(r.memberId)),
-    marks: data.marks.filter((k) => !gone.has(k.memberId)),
+    members: data.members.filter((m) => !ids.has(m.id)),
+    records: data.records.filter((r) => !ids.has(r.memberId)),
+    marks: data.marks.filter((k) => !ids.has(k.memberId)),
   };
 }

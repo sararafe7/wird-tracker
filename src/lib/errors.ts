@@ -1,5 +1,5 @@
 /** Error kinds the app can show; WirdApp maps each to an Arabic message */
-export type ErrorKind = "load" | "save" | "copy" | "unexpected";
+export type ErrorKind = "load" | "save" | "copy" | "email_taken" | "forbidden" | "unexpected";
 
 export const ERROR_EVENT = "wird:error";
 

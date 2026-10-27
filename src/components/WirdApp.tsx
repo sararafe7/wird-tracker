@@ -1,24 +1,18 @@
-import { ChevronLeft, Pencil, Plus, Trash2, UserPlus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronLeft, LogIn, LogOut, Pencil, Plus, Trash2, UserPlus, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
 import { fill, inputClass, type Strings } from "@/components/ui";
+import { ApiError, fetchSession, type Session, sendOp } from "@/lib/api";
+import { getSignOutUrl } from "@/lib/auth";
 import { ERROR_EVENT, type ErrorKind, reportError } from "@/lib/errors";
 import { newId } from "@/lib/id";
-import {
-  currentUser,
-  type Data,
-  deleteGroup,
-  emptyData,
-  type Group,
-  groupMembers,
-  load,
-  type Staff,
-  save,
-  visibleGroups,
-} from "@/lib/store";
+import { applyOp, type Op } from "@/lib/ops";
+import { type Data, type Group, groupMembers, type Staff, visibleGroups } from "@/lib/store";
 import { dayView, wirdDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
+
+const DEV_EMAIL_COOKIE = "wird_dev_email";
 
 type Route = { view: "home" } | { view: "group" | "table"; groupId: string };
 
@@ -33,132 +27,134 @@ function go(route: Route) {
     route.view === "home" ? "" : `#/g/${route.groupId}${route.view === "table" ? "/table" : ""}`;
 }
 
+function setDevEmail(email: string) {
+  // biome-ignore lint/suspicious/noDocumentCookie: dev-only switch; the Cookie Store API is missing in Firefox and on plain http
+  document.cookie = email
+    ? `${DEV_EMAIL_COOKIE}=${encodeURIComponent(email)}; path=/; SameSite=Lax`
+    : `${DEV_EMAIL_COOKIE}=; path=/; max-age=0`;
+  location.reload();
+}
+
+function signOut() {
+  if (import.meta.env.DEV) setDevEmail("");
+  else location.href = getSignOutUrl();
+}
+
 interface GroupForm {
   id?: string;
   name: string;
   managerId: string;
 }
 
-function Screens({ t }: { t: Strings }) {
-  const [data, setData] = useState<Data>(emptyData);
-  const [loaded, setLoaded] = useState(false);
-  const [route, setRoute] = useState<Route>({ view: "home" });
-  const [today, setToday] = useState(() => wirdDate());
+/** Local development only: pretend to be any supervisor or manager email */
+function DevSwitch({ t, emails }: { t: Strings; emails: string[] }) {
+  const current = document.cookie.match(/(?:^|; )wird_dev_email=([^;]*)/)?.[1];
+  const [email, setEmail] = useState(current ? decodeURIComponent(current) : "");
+  return (
+    <form
+      className="mb-6 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 text-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setDevEmail(email.trim().toLowerCase());
+      }}
+    >
+      <label className="flex items-center gap-2">
+        <span className="shrink-0 font-medium text-amber-900">{t["dev.acting_as"]}</span>
+        <input
+          list="dev-emails"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="name@example.com"
+          dir="ltr"
+          className={cn(inputClass, "py-1.5")}
+        />
+        <datalist id="dev-emails">
+          {emails.map((e) => (
+            <option key={e} value={e} />
+          ))}
+        </datalist>
+        <button type="submit" className="btn-secondary shrink-0 !px-3 !py-1.5 text-sm">
+          {t["dev.switch"]}
+        </button>
+      </label>
+      <p className="mt-1 text-xs text-amber-800">{t["dev.note"]}</p>
+    </form>
+  );
+}
+
+function Home({
+  t,
+  data,
+  apply,
+  today,
+}: {
+  t: Strings;
+  data: Data;
+  apply: (op: Op) => void;
+  today: string;
+}) {
   const [groupForm, setGroupForm] = useState<GroupForm | null>(null);
-  const [managerName, setManagerName] = useState("");
+  const [manager, setManager] = useState({ name: "", email: "" });
 
-  useEffect(() => {
-    setData(load());
-    setLoaded(true);
-    setRoute(parseHash(location.hash));
-    const onHash = () => setRoute(parseHash(location.hash));
-    window.addEventListener("hashchange", onHash);
-    // Keep "today" right if the page stays open across the day boundary
-    const id = window.setInterval(() => setToday(wirdDate()), 60_000);
-    return () => {
-      window.removeEventListener("hashchange", onHash);
-      window.clearInterval(id);
-    };
-  }, []);
-
-  function update(next: Data) {
-    setData(next);
-    save(next);
-  }
-
-  if (!loaded) return <p className="text-stone-500">{t["common.loading"]}</p>;
-
-  const user = currentUser(data);
+  const user = data.me;
   const groups = visibleGroups(data);
   const managers = data.staff.filter((s) => s.role === "manager");
   const isSupervisor = user.role === "supervisor";
-
-  if (route.view !== "home") {
-    const group = groups.find((g) => g.id === route.groupId);
-    if (group && route.view === "table") {
-      return (
-        <GroupTable
-          t={t}
-          data={data}
-          group={group}
-          today={today}
-          onClose={() => go({ view: "group", groupId: group.id })}
-        />
-      );
-    }
-    if (group) {
-      return (
-        <GroupBoard
-          key={group.id}
-          t={t}
-          data={data}
-          update={update}
-          group={group}
-          user={user}
-          today={today}
-          onBack={() => go({ view: "home" })}
-          onTable={() => go({ view: "table", groupId: group.id })}
-        />
-      );
-    }
-  }
+  const nameOf = (id: string | null) => data.staff.find((s) => s.id === id)?.name;
 
   function saveGroup(e: { preventDefault(): void }) {
     e.preventDefault();
     if (!groupForm) return;
     const name = groupForm.name.trim();
     if (!name) return;
-    const managerId = groupForm.managerId || null;
-    const nextGroups = groupForm.id
-      ? data.groups.map((g) => (g.id === groupForm.id ? { ...g, name, managerId } : g))
-      : [...data.groups, { id: newId(), name, managerId }];
-    update({ ...data, groups: nextGroups });
+    apply({
+      type: "groupSave",
+      id: groupForm.id ?? newId(),
+      name,
+      managerId: groupForm.managerId || null,
+    });
     setGroupForm(null);
   }
 
   function removeGroup(g: Group) {
     if (!confirm(fill(t["groups.delete_confirm"], { name: g.name }))) return;
-    update(deleteGroup(data, g.id));
+    apply({ type: "groupRemove", id: g.id });
     setGroupForm(null);
   }
 
   function addManager(e: { preventDefault(): void }) {
     e.preventDefault();
-    const name = managerName.trim();
-    if (!name) return;
-    update({ ...data, staff: [...data.staff, { id: newId(), name, role: "manager" }] });
-    setManagerName("");
+    const name = manager.name.trim();
+    const email = manager.email.trim().toLowerCase();
+    if (!name || !email) return;
+    if (data.staff.some((s) => s.email === email)) {
+      reportError("email_taken", new Error(email));
+      return;
+    }
+    apply({ type: "staffAdd", id: newId(), name, email });
+    setManager({ name: "", email: "" });
   }
 
   function removeManager(s: Staff) {
     if (!confirm(fill(t["staff.delete_confirm"], { name: s.name }))) return;
-    update({
-      ...data,
-      staff: data.staff.filter((x) => x.id !== s.id),
-      groups: data.groups.map((g) => (g.managerId === s.id ? { ...g, managerId: null } : g)),
-    });
+    apply({ type: "staffRemove", id: s.id });
   }
-
-  const nameOf = (id: string | null) => data.staff.find((s) => s.id === id)?.name;
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 text-sm">
-        <label className="flex items-center gap-2">
-          <span className="shrink-0 font-medium text-amber-900">{t["dev.acting_as"]}</span>
-          <select
-            value={user.id}
-            onChange={(e) => update({ ...data, actingAs: e.target.value })}
-            className={cn(inputClass, "py-1.5")}
-          >
-            {data.staff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} — {t[`role.${s.role}`]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="mt-1 text-xs text-amber-800">{t["dev.note"]}</p>
+      <div className="flex items-center justify-between gap-2 text-sm text-stone-600">
+        <span className="min-w-0 truncate">
+          {user.name} · {t[`role.${user.role}`]}
+        </span>
+        <button
+          type="button"
+          onClick={signOut}
+          className="inline-flex shrink-0 items-center gap-1 hover:text-slate-900"
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          {t["auth.sign_out"]}
+        </button>
       </div>
 
       <section className="space-y-3">
@@ -287,11 +283,21 @@ function Screens({ t }: { t: Strings }) {
                 const count = data.groups.filter((g) => g.managerId === s.id).length;
                 return (
                   <li key={s.id} className="flex items-center justify-between gap-2 px-4 py-2">
-                    <span className="min-w-0 truncate">
-                      {s.name}
-                      <span className="ms-2 text-xs text-stone-500">
-                        {fill(t["staff.groups_count"], { n: count })}
+                    <span className="min-w-0">
+                      <span className="block truncate">
+                        {s.name}
+                        <span className="ms-2 text-xs text-stone-500">
+                          {fill(t["staff.groups_count"], { n: count })}
+                        </span>
                       </span>
+                      <span className="block truncate text-xs text-stone-500" dir="ltr">
+                        {s.email}
+                      </span>
+                      {!s.linked && (
+                        <span className="block text-xs text-amber-700">
+                          {t["staff.not_signed_in"]}
+                        </span>
+                      )}
                     </span>
                     <button
                       type="button"
@@ -306,15 +312,27 @@ function Screens({ t }: { t: Strings }) {
               })}
             </ul>
           )}
-          <form onSubmit={addManager} className="flex gap-2">
+          <form onSubmit={addManager} className="card space-y-3 !p-4">
             <input
-              value={managerName}
-              onChange={(e) => setManagerName(e.target.value)}
+              required
+              value={manager.name}
+              onChange={(e) => setManager({ ...manager, name: e.target.value })}
               placeholder={t["staff.name_placeholder"]}
               aria-label={t["staff.name_placeholder"]}
               className={inputClass}
             />
-            <button type="submit" className="btn-secondary shrink-0 !px-4">
+            <input
+              required
+              type="email"
+              dir="ltr"
+              value={manager.email}
+              onChange={(e) => setManager({ ...manager, email: e.target.value })}
+              placeholder={t["staff.email_placeholder"]}
+              aria-label={t["staff.email_placeholder"]}
+              className={cn(inputClass, "text-end")}
+            />
+            <p className="text-xs text-stone-500">{t["staff.email_hint"]}</p>
+            <button type="submit" className="btn-secondary w-full">
               <UserPlus className="h-4 w-4" aria-hidden="true" />
               {t["staff.add"]}
             </button>
@@ -322,6 +340,146 @@ function Screens({ t }: { t: Strings }) {
         </section>
       )}
     </div>
+  );
+}
+
+function Screens({ t }: { t: Strings }) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [route, setRoute] = useState<Route>({ view: "home" });
+  const [today, setToday] = useState(() => wirdDate());
+
+  const reload = useCallback(() => {
+    fetchSession()
+      .then((s) => {
+        setSession(s);
+        setLoadFailed(false);
+      })
+      .catch((error) => {
+        reportError("load", error);
+        setLoadFailed(true);
+      });
+  }, []);
+
+  useEffect(() => {
+    reload();
+    setRoute(parseHash(location.hash));
+    const onHash = () => setRoute(parseHash(location.hash));
+    // Pick up changes made on other phones when she comes back to the app
+    const onVisible = () => document.visibilityState === "visible" && reload();
+    window.addEventListener("hashchange", onHash);
+    document.addEventListener("visibilitychange", onVisible);
+    // Keep "today" right if the page stays open across the day boundary
+    const id = window.setInterval(() => setToday(wirdDate()), 60_000);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(id);
+    };
+  }, [reload]);
+
+  /** Show the change at once, then save it; on failure report it and reload the saved state */
+  const apply = useCallback(
+    (op: Op) => {
+      setSession((s) => (s?.kind === "ready" ? { ...s, data: applyOp(s.data, op) } : s));
+      sendOp(op).catch((error) => {
+        if (error instanceof ApiError && error.status === 409) reportError("email_taken", error);
+        else if (error instanceof ApiError && error.status === 403) reportError("forbidden", error);
+        else reportError("save", error);
+        reload();
+      });
+    },
+    [reload],
+  );
+
+  const dev = import.meta.env.DEV && session?.dev ? <DevSwitch t={t} emails={session.dev} /> : null;
+
+  if (!session) {
+    return loadFailed ? (
+      <div className="card space-y-3 text-center">
+        <p className="text-stone-600">{t["error.load"]}</p>
+        <button type="button" className="btn-secondary" onClick={reload}>
+          {t["common.retry"]}
+        </button>
+      </div>
+    ) : (
+      <p className="text-stone-500">{t["common.loading"]}</p>
+    );
+  }
+
+  if (session.kind === "signed_out") {
+    return (
+      <>
+        {dev}
+        <div className="card space-y-4 text-center">
+          <h1 className="text-2xl font-bold text-slate-900">{t["auth.title"]}</h1>
+          <p className="text-stone-600">{t["auth.intro"]}</p>
+          {!import.meta.env.DEV && (
+            <a href={session.signInUrl} className="btn-primary">
+              <LogIn className="h-5 w-5" aria-hidden="true" />
+              {t["auth.sign_in"]}
+            </a>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  if (session.kind === "not_added") {
+    return (
+      <>
+        {dev}
+        <div className="card space-y-4 text-center">
+          <h1 className="text-xl font-bold text-slate-900">{t["auth.not_added_title"]}</h1>
+          <p className="text-stone-600">{t["auth.not_added"]}</p>
+          <p className="font-medium" dir="ltr">
+            {session.email}
+          </p>
+          <button type="button" className="btn-secondary" onClick={signOut}>
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            {t["auth.sign_out"]}
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  const { data } = session;
+  if (route.view !== "home") {
+    const group = visibleGroups(data).find((g) => g.id === route.groupId);
+    if (group && route.view === "table") {
+      return (
+        <GroupTable
+          t={t}
+          data={data}
+          group={group}
+          today={today}
+          onClose={() => go({ view: "group", groupId: group.id })}
+        />
+      );
+    }
+    if (group) {
+      return (
+        <GroupBoard
+          key={group.id}
+          t={t}
+          data={data}
+          apply={apply}
+          group={group}
+          user={data.me}
+          today={today}
+          onBack={() => go({ view: "home" })}
+          onTable={() => go({ view: "table", groupId: group.id })}
+        />
+      );
+    }
+  }
+
+  return (
+    <>
+      {dev}
+      <Home t={t} data={data} apply={apply} today={today} />
+    </>
   );
 }
 

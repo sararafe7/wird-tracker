@@ -1,8 +1,8 @@
 {
-  "name": "hasanat-starter",
+  "name": "wird",
   "type": "module",
   "version": "1.0.0",
-  "description": "Build apps that serve the Ummah — Astro starter for hasanat.dev",
+  "description": "Daily Quran wird tracking for WhatsApp groups",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
@@ -11,8 +11,8 @@
     "lint:fix": "biome check src --write",
     "format": "biome format --write .",
     "check": "astro check && tsc --noEmit",
-    "db:migrate:local": "wrangler d1 execute YOUR_DB_NAME --local --file=schema.sql",
-    "db:migrate:prod": "wrangler d1 execute YOUR_DB_NAME --remote --file=schema.sql"
+    "db:migrate:local": "wrangler d1 migrations apply wird-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply wird-db --remote"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.6",

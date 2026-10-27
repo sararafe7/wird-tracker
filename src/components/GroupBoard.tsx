@@ -13,6 +13,7 @@ import {
 import { useRef, useState } from "react";
 import { copyText, fill, inputClass, SpanText, type Strings } from "@/components/ui";
 import { newId } from "@/lib/id";
+import type { Op } from "@/lib/ops";
 import {
   canManageMembers,
   type Data,
@@ -20,9 +21,7 @@ import {
   groupMembers,
   hasMark,
   type MarkKind,
-  moveMember,
   type Staff,
-  toggleMark,
 } from "@/lib/store";
 import {
   clampDaily,
@@ -31,8 +30,6 @@ import {
   dayView,
   khatmat,
   type Member,
-  removeRecord,
-  setRecord,
   stats,
   TOTAL_PAGES,
 } from "@/lib/wird";
@@ -54,7 +51,7 @@ const emptyForm: FormState = { name: "", daily: "5", startPage: "1" };
 interface Props {
   t: Strings;
   data: Data;
-  update: (next: Data) => void;
+  apply: (op: Op) => void;
   group: Group;
   user: Staff;
   today: string;
@@ -62,16 +59,7 @@ interface Props {
   onTable: () => void;
 }
 
-export default function GroupBoard({
-  t,
-  data,
-  update,
-  group,
-  user,
-  today,
-  onBack,
-  onTable,
-}: Props) {
+export default function GroupBoard({ t, data, apply, group, user, today, onBack, onTable }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
   const [picker, setPicker] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
@@ -87,9 +75,11 @@ export default function GroupBoard({
   const canManage = canManageMembers(user, group);
 
   function record(m: Member, value: number | null) {
-    const next =
-      value === null ? removeRecord(records, m.id, date) : setRecord(records, m, date, value);
-    update({ ...data, records: next });
+    apply(
+      value === null
+        ? { type: "recordRemove", memberId: m.id, date }
+        : { type: "recordSet", memberId: m.id, date, value },
+    );
     setPicker(null);
   }
 
@@ -125,21 +115,17 @@ export default function GroupBoard({
     if (!name) return;
     const daily = clampDaily(Number(form.daily) || 1);
     const startPage = clampPage(Number(form.startPage) || 1);
-    const nextMembers = form.id
-      ? data.members.map((x) => (x.id === form.id ? { ...x, name, daily, startPage } : x))
-      : [...data.members, { id: newId(), groupId: group.id, name, daily, startPage }];
-    update({ ...data, members: nextMembers });
+    apply(
+      form.id
+        ? { type: "memberUpdate", id: form.id, name, daily, startPage }
+        : { type: "memberAdd", id: newId(), groupId: group.id, name, daily, startPage },
+    );
     setForm(null);
   }
 
   function remove(id: string) {
     if (!confirm(t["form.delete_confirm"])) return;
-    update({
-      ...data,
-      members: data.members.filter((x) => x.id !== id),
-      records: records.filter((r) => r.memberId !== id),
-      marks: marks.filter((k) => k.memberId !== id),
-    });
+    apply({ type: "memberRemove", id });
     setForm(null);
   }
 
@@ -345,9 +331,7 @@ export default function GroupBoard({
                     <button
                       type="button"
                       disabled={index === 0}
-                      onClick={() =>
-                        update({ ...data, members: moveMember(data.members, m.id, -1) })
-                      }
+                      onClick={() => apply({ type: "memberMove", id: m.id, dir: -1 })}
                       aria-label={fill(t["board.move_up"], { name: m.name })}
                       className="rounded-lg border border-slate-200 p-1.5 text-slate-700 disabled:opacity-30"
                     >
@@ -356,9 +340,7 @@ export default function GroupBoard({
                     <button
                       type="button"
                       disabled={index === members.length - 1}
-                      onClick={() =>
-                        update({ ...data, members: moveMember(data.members, m.id, 1) })
-                      }
+                      onClick={() => apply({ type: "memberMove", id: m.id, dir: 1 })}
                       aria-label={fill(t["board.move_down"], { name: m.name })}
                       className="rounded-lg border border-slate-200 p-1.5 text-slate-700 disabled:opacity-30"
                     >
@@ -412,7 +394,7 @@ export default function GroupBoard({
                         type="button"
                         aria-pressed={on}
                         onClick={() =>
-                          update({ ...data, marks: toggleMark(marks, m.id, date, kind) })
+                          apply({ type: "markSet", memberId: m.id, date, kind, on: !on })
                         }
                         className={cn(
                           "rounded-full border px-3 py-1 text-xs font-medium",

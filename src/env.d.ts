@@ -6,6 +6,7 @@ type D1Result = import("@cloudflare/workers-types").D1Result;
 
 interface Env {
   DB: D1Database;
+  SUPERVISOR_EMAILS?: string; // comma-separated supervisor emails
   // CACHE: KVNamespace;
   [key: string]: unknown;
 }
