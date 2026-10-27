@@ -5,13 +5,12 @@
  * External apps should use the OAuth flow.
  */
 
-const AUTH_URL = import.meta.env.DEV
-  ? "http://localhost:8788"
-  : "https://auth.hasanat.dev";
+const AUTH_URL = import.meta.env.DEV ? "http://localhost:8788" : "https://auth.hasanat.dev";
 
 /** Redirect the user to the Hasanat sign-in page */
 export function getSignInUrl(callbackUrl?: string): string {
-  const callback = callbackUrl || (import.meta.env.DEV ? "http://localhost:4321" : import.meta.env.SITE);
+  const callback =
+    callbackUrl || (import.meta.env.DEV ? "http://localhost:4321" : import.meta.env.SITE);
   return `${AUTH_URL}/api/auth/signin?callbackUrl=${encodeURIComponent(callback)}`;
 }
 

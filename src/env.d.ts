@@ -2,6 +2,7 @@
 
 type D1Database = import("@cloudflare/workers-types").D1Database;
 type KVNamespace = import("@cloudflare/workers-types").KVNamespace;
+type D1Result = import("@cloudflare/workers-types").D1Result;
 
 interface Env {
   DB: D1Database;

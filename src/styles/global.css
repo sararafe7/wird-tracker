@@ -28,16 +28,10 @@
 /* ─── Components ─── */
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3
-      bg-hasanat text-white font-medium rounded-xl
-      hover:bg-hasanat-dark transition-colors duration-150
-      focus:outline-none focus:ring-2 focus:ring-hasanat/50 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-hasanat text-white font-medium rounded-xl hover:bg-hasanat-dark transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-hasanat/50 focus:ring-offset-2;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3
-      border border-slate-200 text-slate-700 font-medium rounded-xl
-      hover:bg-slate-50 transition-colors duration-150
-      focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2;
   }
   .card {
     @apply bg-white rounded-2xl shadow-sm border border-slate-100 p-6;

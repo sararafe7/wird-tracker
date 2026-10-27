@@ -11,7 +11,7 @@ export default defineConfig({
   // Arabic-first, with English support
   i18n: {
     defaultLocale: "ar",
-    locales: ["ar", "en"],
+    locales: ["ar"],
     routing: {
       prefixDefaultLocale: true,
       redirectToDefaultLocale: false,
@@ -23,7 +23,7 @@ export default defineConfig({
     sitemap({
       i18n: {
         defaultLocale: "ar",
-        locales: { ar: "ar", en: "en" },
+        locales: { ar: "ar" },
       },
     }),
   ],

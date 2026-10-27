@@ -5,6 +5,6 @@ export const GET: APIRoute = async ({ locals }) => {
   const hasDB = !!locals.runtime?.env?.DB;
   return new Response(
     JSON.stringify({ status: "ok", database: hasDB ? "connected" : "not configured" }),
-    { headers: { "Content-Type": "application/json" } }
+    { headers: { "Content-Type": "application/json" } },
   );
 };

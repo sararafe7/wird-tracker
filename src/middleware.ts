@@ -11,15 +11,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // Check auth for API routes and protected pages
   const needsAuth =
-    context.url.pathname.startsWith("/api/") ||
-    context.url.pathname.includes("/dashboard");
+    context.url.pathname.startsWith("/api/") || context.url.pathname.includes("/dashboard");
 
   if (needsAuth && cookie.includes("authjs.session-token")) {
     try {
       const authUrl =
-        context.url.hostname === "localhost"
-          ? "http://localhost:8788"
-          : "https://auth.hasanat.dev";
+        context.url.hostname === "localhost" ? "http://localhost:8788" : "https://auth.hasanat.dev";
 
       const res = await fetch(`${authUrl}/api/auth/session`, {
         headers: { cookie },

@@ -1,4 +1,4 @@
-export const locales = ["ar", "en"] as const;
+export const locales = ["ar"] as const;
 export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "ar";
 export const rtlLocales: Locale[] = ["ar"];
@@ -18,9 +18,8 @@ export function getDirection(locale: Locale): "rtl" | "ltr" {
 }
 
 import ar from "./ar.json";
-import en from "./en.json";
 
-const translations: Record<Locale, Record<string, string>> = { ar, en };
+const translations: Record<Locale, Record<string, string>> = { ar };
 
 export function useTranslations(locale: Locale) {
   const t = translations[locale] || translations[defaultLocale];
