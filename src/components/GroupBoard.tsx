@@ -7,10 +7,12 @@ import {
   ListOrdered,
   Pencil,
   Plus,
+  Star,
   Table2,
   Trash2,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { SHARE_THEMES } from "@/components/theme";
 import { copyText, fill, inputClass, SpanText, type Strings } from "@/components/ui";
 import { newId } from "@/lib/id";
 import type { Op } from "@/lib/ops";
@@ -57,9 +59,20 @@ interface Props {
   today: string;
   onBack: () => void;
   onTable: () => void;
+  onWeek: () => void;
 }
 
-export default function GroupBoard({ t, data, apply, group, user, today, onBack, onTable }: Props) {
+export default function GroupBoard({
+  t,
+  data,
+  apply,
+  group,
+  user,
+  today,
+  onBack,
+  onTable,
+  onWeek,
+}: Props) {
   const [form, setForm] = useState<FormState | null>(null);
   const [picker, setPicker] = useState<string | null>(null);
   const [custom, setCustom] = useState("");
@@ -73,6 +86,7 @@ export default function GroupBoard({ t, data, apply, group, user, today, onBack,
   const { records, marks } = data;
   const members = groupMembers(data, group.id);
   const canManage = canManageMembers(user, group);
+  const theme = SHARE_THEMES[group.audience];
 
   function record(m: Member, value: number | null) {
     apply(
@@ -214,6 +228,10 @@ export default function GroupBoard({ t, data, apply, group, user, today, onBack,
             <button type="button" className="btn-primary !px-4 !py-2 text-sm" onClick={onTable}>
               <Table2 className="h-4 w-4" aria-hidden="true" />
               {t["board.table"]}
+            </button>
+            <button type="button" className="btn-secondary !px-4 !py-2 text-sm" onClick={onWeek}>
+              <Star className="h-4 w-4" aria-hidden="true" />
+              {t["week.title"]}
             </button>
             <button
               type="button"
@@ -398,10 +416,8 @@ export default function GroupBoard({ t, data, apply, group, user, today, onBack,
                         }
                         className={cn(
                           "rounded-full border px-3 py-1 text-xs font-medium",
-                          on
-                            ? "border-pink-300 bg-pink-100 text-pink-800"
-                            : "border-slate-200 text-stone-500",
-                          kind === "kahf" && isFriday && !on && "border-pink-200 text-pink-700",
+                          on ? theme.markOn : "border-slate-200 text-stone-500",
+                          kind === "kahf" && isFriday && !on && theme.markHint,
                         )}
                       >
                         {on && <Check className="me-1 inline h-3 w-3" aria-hidden="true" />}

@@ -139,5 +139,16 @@
   "board.empty_readonly#boys": "لا يوجد إخوة في هذه المجموعة بعد.",
   "groups.audience": "أعضاء المجموعة",
   "audience.girls": "أخوات",
-  "audience.boys": "إخوة"
+  "audience.boys": "إخوة",
+  "week.title": "متميزة الأسبوع",
+  "week.title#girls": "متميزة الأسبوع",
+  "week.title#boys": "متميز الأسبوع",
+  "week.range": "من الأحد {from} إلى السبت {to}",
+  "week.perfect": "أتمّت الورد كل أيام الأسبوع",
+  "week.perfect#girls": "أتمّت الورد كل أيام الأسبوع",
+  "week.perfect#boys": "أتمّ الورد كل أيام الأسبوع",
+  "week.top": "الأكثر أياماً هذا الأسبوع",
+  "week.empty": "لا توجد قراءات مسجّلة في هذا الأسبوع.",
+  "week.prev": "الأسبوع السابق",
+  "week.next": "الأسبوع التالي"
 }

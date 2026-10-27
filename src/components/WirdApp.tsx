@@ -2,6 +2,7 @@ import { ChevronLeft, LogIn, LogOut, Pencil, Plus, Trash2, UserPlus, X } from "l
 import { useCallback, useEffect, useState } from "react";
 import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
+import GroupWeek from "@/components/GroupWeek";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
@@ -21,17 +22,20 @@ import { cn } from "@/utils/cn";
 
 const DEV_EMAIL_COOKIE = "wird_dev_email";
 
-type Route = { view: "home" } | { view: "group" | "table"; groupId: string };
+type Route = { view: "home" } | { view: "group" | "table" | "week"; groupId: string };
 
 function parseHash(hash: string): Route {
-  const m = hash.match(/^#\/g\/([^/]+)(\/table)?$/);
+  const m = hash.match(/^#\/g\/([^/]+)(?:\/(table|week))?$/);
   if (!m) return { view: "home" };
-  return { view: m[2] ? "table" : "group", groupId: decodeURIComponent(m[1]) };
+  const view = m[2] === "table" || m[2] === "week" ? m[2] : "group";
+  return { view, groupId: decodeURIComponent(m[1]) };
 }
 
 function go(route: Route) {
   location.hash =
-    route.view === "home" ? "" : `#/g/${route.groupId}${route.view === "table" ? "/table" : ""}`;
+    route.view === "home"
+      ? ""
+      : `#/g/${route.groupId}${route.view === "group" ? "" : `/${route.view}`}`;
 }
 
 function setDevEmail(email: string) {
@@ -496,6 +500,19 @@ function Screens({ t }: { t: Strings }) {
     if (group && route.view === "table") {
       return (
         <GroupTable
+          key={group.id}
+          t={audienceStrings(t, group.audience)}
+          data={data}
+          group={group}
+          today={today}
+          onClose={() => go({ view: "group", groupId: group.id })}
+        />
+      );
+    }
+    if (group && route.view === "week") {
+      return (
+        <GroupWeek
+          key={group.id}
           t={audienceStrings(t, group.audience)}
           data={data}
           group={group}
@@ -516,6 +533,7 @@ function Screens({ t }: { t: Strings }) {
           today={today}
           onBack={() => go({ view: "home" })}
           onTable={() => go({ view: "table", groupId: group.id })}
+          onWeek={() => go({ view: "week", groupId: group.id })}
         />
       );
     }

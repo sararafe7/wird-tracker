@@ -145,3 +145,38 @@ export function addDays(date: string, days: number): string {
 export function dateValue(date: string): Date {
   return new Date(`${date}T12:00:00`);
 }
+
+/** Sunday that starts the week (Sunday to Saturday) holding this date */
+export function weekStart(date: string): string {
+  return addDays(date, -dateValue(date).getDay());
+}
+
+export interface WeekStar {
+  member: Member;
+  number: number; // her position in the group, as in the table
+  days: number;
+}
+
+/**
+ * Members to celebrate for the week starting on `start`: everyone with all 7 days recorded
+ * (0 counts as a day), or else the top three by days with anyone tied with third place.
+ */
+export function weekStars(
+  members: Member[],
+  records: WirdRecord[],
+  start: string,
+): { stars: WeekStar[]; perfect: boolean } {
+  const end = addDays(start, 6);
+  const ranked = members
+    .map((member, i) => ({
+      member,
+      number: i + 1,
+      days: stats(records, member.id, start, end).days,
+    }))
+    .filter((s) => s.days > 0)
+    .sort((a, b) => b.days - a.days || a.number - b.number);
+  const perfect = ranked.filter((s) => s.days === 7);
+  if (perfect.length > 0) return { stars: perfect, perfect: true };
+  const cutoff = ranked[2]?.days ?? 0;
+  return { stars: ranked.filter((s) => s.days >= cutoff), perfect: false };
+}
