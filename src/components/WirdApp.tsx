@@ -2,13 +2,20 @@ import { ChevronLeft, LogIn, LogOut, Pencil, Plus, Trash2, UserPlus, X } from "l
 import { useCallback, useEffect, useState } from "react";
 import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
-import { fill, inputClass, type Strings } from "@/components/ui";
+import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
 import { ERROR_EVENT, type ErrorKind, reportError } from "@/lib/errors";
 import { newId } from "@/lib/id";
 import { applyOp, type Op } from "@/lib/ops";
-import { type Data, type Group, groupMembers, type Staff, visibleGroups } from "@/lib/store";
+import {
+  type Audience,
+  type Data,
+  type Group,
+  groupMembers,
+  type Staff,
+  visibleGroups,
+} from "@/lib/store";
 import { dayView, wirdDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
@@ -44,7 +51,10 @@ interface GroupForm {
   id?: string;
   name: string;
   managerId: string;
+  audience: Audience;
 }
+
+const AUDIENCES: Audience[] = ["girls", "boys"];
 
 /** Local development only: pretend to be any supervisor or manager email */
 function DevSwitch({ t, emails }: { t: Strings; emails: string[] }) {
@@ -113,6 +123,7 @@ function Home({
       id: groupForm.id ?? newId(),
       name,
       managerId: groupForm.managerId || null,
+      audience: groupForm.audience,
     });
     setGroupForm(null);
   }
@@ -179,6 +190,8 @@ function Home({
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-slate-900">{g.name}</p>
                     <p className="text-sm text-stone-500">
+                      {t[`audience.${g.audience}`]}
+                      {" · "}
                       {nameOf(g.managerId) ?? t["groups.no_manager"]}
                       {" · "}
                       {fill(t["wird.progress"], { done, total: members.length })}
@@ -193,7 +206,12 @@ function Home({
                   <button
                     type="button"
                     onClick={() =>
-                      setGroupForm({ id: g.id, name: g.name, managerId: g.managerId ?? "" })
+                      setGroupForm({
+                        id: g.id,
+                        name: g.name,
+                        managerId: g.managerId ?? "",
+                        audience: g.audience,
+                      })
                     }
                     aria-label={fill(t["wird.edit"], { name: g.name })}
                     className="me-2 rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-slate-700"
@@ -210,7 +228,9 @@ function Home({
           <button
             type="button"
             className="btn-secondary w-full"
-            onClick={() => setGroupForm({ name: "", managerId: managers[0]?.id ?? "" })}
+            onClick={() =>
+              setGroupForm({ name: "", managerId: managers[0]?.id ?? "", audience: "girls" })
+            }
           >
             <Plus className="h-5 w-5" aria-hidden="true" />
             {t["groups.add"]}
@@ -249,6 +269,32 @@ function Home({
             {managers.length === 0 && (
               <p className="text-xs text-stone-500">{t["groups.add_manager_first"]}</p>
             )}
+            <fieldset className="space-y-1">
+              <legend className="text-sm font-medium">{t["groups.audience"]}</legend>
+              <div className="flex gap-2">
+                {AUDIENCES.map((a) => (
+                  <label
+                    key={a}
+                    className={cn(
+                      "flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm",
+                      groupForm.audience === a
+                        ? "border-hasanat bg-hasanat/5 font-medium text-hasanat-dark"
+                        : "border-stone-200 text-slate-700",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="audience"
+                      value={a}
+                      checked={groupForm.audience === a}
+                      onChange={() => setGroupForm({ ...groupForm, audience: a })}
+                      className="sr-only"
+                    />
+                    {t[`audience.${a}`]}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="flex flex-wrap gap-2">
               <button type="submit" className="btn-primary flex-1">
                 {t["common.save"]}
@@ -450,7 +496,7 @@ function Screens({ t }: { t: Strings }) {
     if (group && route.view === "table") {
       return (
         <GroupTable
-          t={t}
+          t={audienceStrings(t, group.audience)}
           data={data}
           group={group}
           today={today}
@@ -462,7 +508,7 @@ function Screens({ t }: { t: Strings }) {
       return (
         <GroupBoard
           key={group.id}
-          t={t}
+          t={audienceStrings(t, group.audience)}
           data={data}
           apply={apply}
           group={group}

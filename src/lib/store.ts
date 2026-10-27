@@ -15,10 +15,14 @@ export interface Staff {
   linked: boolean; // has signed in at least once
 }
 
+/** Who a group's members are; it only changes the wording about them */
+export type Audience = "girls" | "boys";
+
 export interface Group {
   id: string;
   name: string;
   managerId: string | null;
+  audience: Audience;
 }
 
 export type MarkKind = "kahf" | "mulk";

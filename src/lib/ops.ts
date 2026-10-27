@@ -38,7 +38,13 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("memberUpdate"), id, name, daily: page, startPage: page }),
   z.object({ type: z.literal("memberRemove"), id }),
   z.object({ type: z.literal("memberMove"), id, dir: z.union([z.literal(-1), z.literal(1)]) }),
-  z.object({ type: z.literal("groupSave"), id, name, managerId: id.nullable() }),
+  z.object({
+    type: z.literal("groupSave"),
+    id,
+    name,
+    managerId: id.nullable(),
+    audience: z.enum(["girls", "boys"]),
+  }),
   z.object({ type: z.literal("groupRemove"), id }),
   z.object({
     type: z.literal("staffAdd"),
@@ -89,7 +95,7 @@ export function applyOp(data: Data, op: Op): Data {
     case "memberMove":
       return { ...data, members: moveMember(data.members, op.id, op.dir) };
     case "groupSave": {
-      const group = { id: op.id, name: op.name, managerId: op.managerId };
+      const group = { id: op.id, name: op.name, managerId: op.managerId, audience: op.audience };
       const exists = data.groups.some((g) => g.id === op.id);
       return {
         ...data,

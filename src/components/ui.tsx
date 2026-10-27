@@ -1,7 +1,21 @@
 import { reportError } from "@/lib/errors";
+import type { Audience } from "@/lib/store";
 import type { Span } from "@/lib/wird";
 
 export type Strings = Record<string, string>;
+
+/**
+ * Strings worded for a group's members: a "key#girls" or "key#boys" entry
+ * replaces "key", so the rest of the code keeps using plain keys.
+ */
+export function audienceStrings(t: Strings, audience: Audience): Strings {
+  const suffix = `#${audience}`;
+  const out = { ...t };
+  for (const key of Object.keys(t)) {
+    if (key.endsWith(suffix)) out[key.slice(0, -suffix.length)] = t[key];
+  }
+  return out;
+}
 
 export const inputClass =
   "w-full rounded-lg border border-stone-200 bg-white px-4 py-2 focus:border-teal-500 focus:ring-1 focus:ring-teal-500";

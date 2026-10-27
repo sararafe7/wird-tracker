@@ -12,6 +12,8 @@ export const DEV_EMAIL_COOKIE = "wird_dev_email";
  */
 export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.user = null;
+  // Prerendered pages (the privacy notice) have no request headers and need no user
+  if (context.isPrerendered) return next();
   const cookie = context.request.headers.get("cookie") || "";
 
   // Check auth for API routes and protected pages

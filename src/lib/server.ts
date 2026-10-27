@@ -62,7 +62,9 @@ export async function loadData(db: D1Database, me: Staff): Promise<Data> {
           "SELECT id, name, email, user_id IS NOT NULL AS linked FROM staff ORDER BY created_at",
         )
       : db.prepare("SELECT id, name, email, 1 AS linked FROM staff WHERE id = ?1").bind(me.id),
-    bind(`SELECT g.id, g.name, g.manager_id FROM groups g ${groupFilter} ORDER BY g.created_at`),
+    bind(
+      `SELECT g.id, g.name, g.manager_id, g.audience FROM groups g ${groupFilter} ORDER BY g.created_at`,
+    ),
     bind(
       `SELECT m.id, m.group_id, m.name, m.daily, m.start_page FROM members m
        JOIN groups g ON g.id = m.group_id ${groupFilter}
@@ -97,6 +99,7 @@ export async function loadData(db: D1Database, me: Staff): Promise<Data> {
         id: String(g.id),
         name: String(g.name),
         managerId: g.manager_id ? String(g.manager_id) : null,
+        audience: g.audience === "boys" ? "boys" : "girls",
       }),
     ),
     members: rows(members).map(
@@ -233,10 +236,11 @@ export async function runOp(db: D1Database, me: Staff, op: Op): Promise<void> {
       }
       await db
         .prepare(
-          `INSERT INTO groups (id, name, manager_id) VALUES (?1, ?2, ?3)
-           ON CONFLICT (id) DO UPDATE SET name = excluded.name, manager_id = excluded.manager_id`,
+          `INSERT INTO groups (id, name, manager_id, audience) VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT (id) DO UPDATE SET
+             name = excluded.name, manager_id = excluded.manager_id, audience = excluded.audience`,
         )
-        .bind(op.id, op.name, op.managerId)
+        .bind(op.id, op.name, op.managerId, op.audience)
         .run();
       return;
     case "groupRemove":
