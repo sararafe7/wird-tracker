@@ -30,6 +30,7 @@ import {
   clampPage,
   dateValue,
   dayView,
+  hijriDate,
   khatmat,
   type Member,
   stats,
@@ -170,6 +171,7 @@ export default function GroupBoard({
     day: "numeric",
     month: "long",
   });
+  const hijri = hijriDate(date, false);
   const isFriday = dateValue(date).getDay() === 5;
   const monthStart = `${date.slice(0, 7)}-01`;
   const monthEnd = `${date.slice(0, 7)}-31`;
@@ -192,6 +194,7 @@ export default function GroupBoard({
             <h1 className="truncate text-2xl font-bold text-slate-900">{group.name}</h1>
             <p className="text-sm text-stone-500">
               {date === today ? t["wird.title"] : t["wird.title_past"]} · {dateLabel}
+              {hijri && ` · ${hijri}`}
             </p>
           </div>
           {members.length > 0 && (

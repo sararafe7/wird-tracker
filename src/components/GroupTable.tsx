@@ -3,7 +3,7 @@ import { useState } from "react";
 import { readEmoji, SHARE_THEMES } from "@/components/theme";
 import type { Strings } from "@/components/ui";
 import { type Data, type Group, groupMembers, hasMark, type MarkKind } from "@/lib/store";
-import { addDays, dateValue, dayView } from "@/lib/wird";
+import { addDays, dateValue, dayView, hijriDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
 const MARKS: MarkKind[] = ["kahf", "mulk"];
@@ -29,6 +29,7 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
   const d = dateValue(date);
   const dayName = d.toLocaleDateString(lang, { weekday: "long" });
   const numeric = `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  const hijri = hijriDate(date);
   // Shrink rows for big groups so the whole table still fits on one screen
   const dense = members.length > 18;
   const cell = dense ? "px-1 py-0.5" : "px-1.5 py-1.5";
@@ -38,16 +39,19 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
     <div className={cn("fixed inset-0 z-[60] flex flex-col overflow-y-auto", theme.page)}>
       <div className="mx-auto w-full max-w-md flex-1 px-3 pt-4 pb-2">
         <div className={cn("overflow-hidden rounded-2xl border bg-white shadow-sm", theme.frame)}>
-          <h1
+          <header
             className={cn(
-              "px-3 text-center font-bold",
+              "px-3 text-center",
               theme.header,
               theme.headerText,
-              dense ? "py-2 text-lg" : "py-3 text-xl",
+              dense ? "py-2" : "py-3",
             )}
           >
-            {t["table.title"].replace("{day}", dayName).replace("{date}", numeric)}
-          </h1>
+            <h1 className={cn("font-bold", dense ? "text-lg" : "text-xl")}>
+              {t["table.title"].replace("{day}", dayName).replace("{date}", numeric)}
+            </h1>
+            {hijri && <p className={cn("font-medium", dense ? "text-xs" : "text-sm")}>{hijri}</p>}
+          </header>
           <table className={cn("w-full table-fixed text-center", dense ? "text-xs" : "text-sm")}>
             <colgroup>
               <col className="w-[11%]" />

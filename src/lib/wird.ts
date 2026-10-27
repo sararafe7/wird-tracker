@@ -180,3 +180,43 @@ export function weekStars(
   const cutoff = ranked[2]?.days ?? 0;
   return { stars: ranked.filter((s) => s.days >= cutoff), perfect: false };
 }
+
+const HIJRI_LOCALE = "ar-u-ca-islamic-umalqura-nu-latn";
+const HIJRI_ERA = "هـ";
+
+/** Umm al-Qura Hijri day, month name and year, or null where the browser lacks that calendar */
+function hijriParts(date: string): { day: string; month: string; year: string } | null {
+  try {
+    const format = new Intl.DateTimeFormat(HIJRI_LOCALE, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    // Browsers without the calendar silently fall back to Gregorian; never show that as Hijri
+    if (format.resolvedOptions().calendar !== "islamic-umalqura") return null;
+    const parts = format.formatToParts(dateValue(date));
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    return { day: get("day"), month: get("month"), year: get("year") };
+  } catch {
+    return null;
+  }
+}
+
+/** e.g. "16 جمادى الأولى 1448 هـ", or "16 جمادى الأولى" without the year; "" if unavailable */
+export function hijriDate(date: string, withYear = true): string {
+  const h = hijriParts(date);
+  if (!h) return "";
+  return withYear ? `${h.day} ${h.month} ${h.year} ${HIJRI_ERA}` : `${h.day} ${h.month}`;
+}
+
+/** A Hijri date range, e.g. "14–20 جمادى الأولى 1448 هـ"; "" if unavailable */
+export function hijriRange(start: string, end: string): string {
+  const a = hijriParts(start);
+  const b = hijriParts(end);
+  if (!a || !b) return "";
+  if (a.month === b.month && a.year === b.year) {
+    return `${a.day}–${b.day} ${a.month} ${a.year} ${HIJRI_ERA}`;
+  }
+  const from = a.year === b.year ? `${a.day} ${a.month}` : `${a.day} ${a.month} ${a.year}`;
+  return `${from} – ${b.day} ${b.month} ${b.year} ${HIJRI_ERA}`;
+}

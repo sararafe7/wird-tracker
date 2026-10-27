@@ -3,7 +3,7 @@ import { useState } from "react";
 import { SHARE_THEMES } from "@/components/theme";
 import { fill, type Strings } from "@/components/ui";
 import { type Data, type Group, groupMembers } from "@/lib/store";
-import { addDays, dateValue, weekStars, weekStart } from "@/lib/wird";
+import { addDays, dateValue, hijriRange, weekStars, weekStart } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
 interface Props {
@@ -22,6 +22,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
   const [start, setStart] = useState(() => weekStart(addDays(today, -1)));
   const theme = SHARE_THEMES[group.audience];
   const end = addDays(start, 6);
+  const hijri = hijriRange(start, end);
   const { stars, perfect } = weekStars(groupMembers(data, group.id), data.records, start);
   const short = (date: string) => {
     const d = dateValue(date);
@@ -44,6 +45,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
                 to: `${short(end)}/${dateValue(end).getFullYear()}`,
               })}
             </p>
+            {hijri && <p className={cn("text-sm", theme.accent)}>{hijri}</p>}
           </header>
           {stars.length === 0 ? (
             <p className="px-4 py-8 text-center text-stone-600">{t["week.empty"]}</p>
