@@ -1,13 +1,14 @@
 ---
 import "@/styles/global.css";
-import { getDirection, getLangFromUrl, useTranslations } from "@/i18n/utils";
+import { defaultLocale, getDirection, useTranslations } from "@/i18n/utils";
 
 interface Props {
   title?: string;
   description?: string;
 }
 
-const locale = getLangFromUrl(Astro.url);
+// Arabic only, served at the root
+const locale = defaultLocale;
 const dir = getDirection(locale);
 const t = useTranslations(locale);
 

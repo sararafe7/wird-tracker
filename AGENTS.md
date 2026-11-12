@@ -76,7 +76,7 @@ export const GET: APIRoute = async ({ locals }) => {
 
 ## File Organization
 
-- Pages go in `src/pages/ar/` and `src/pages/en/`
+- Pages go in `src/pages/` (Arabic only, served at the root; `src/pages/ar/[...path].ts` redirects old `/ar/...` links)
 - API routes go in `src/pages/api/`
 - Shared components go in `src/components/`
 - React islands use `client:load` or `client:visible`

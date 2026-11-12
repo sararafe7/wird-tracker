@@ -33,7 +33,7 @@ export async function resolveActor(
   if (!locals.user) {
     return {
       response: json(
-        { reason: "signed_out", signInUrl: getSignInUrl(`${url.origin}/ar/`), dev },
+        { reason: "signed_out", signInUrl: getSignInUrl(`${url.origin}/`), dev },
         401,
       ),
     };
