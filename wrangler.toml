@@ -4,6 +4,7 @@
 
 name = "wird"
 compatibility_date = "2025-12-01"
+compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "./dist"
 
 # D1 database requested from Hasanat. Replace database_id with the id
