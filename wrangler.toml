@@ -19,5 +19,6 @@ migrations_dir = "migrations"
 [vars]
 PUBLIC_SITE_URL = "https://wird.hasanat.dev"
 PUBLIC_APP_NAME = "وِرد"
-# Comma-separated emails that sign in as supervisor
+# Comma-separated emails that sign in as supervisor. Left empty here;
+# the maintainers set the real value in Cloudflare.
 SUPERVISOR_EMAILS = ""
