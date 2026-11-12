@@ -13,6 +13,7 @@ export interface Staff {
   role: Role;
   email: string;
   linked: boolean; // has signed in at least once
+  main?: boolean; // a main supervisor from SUPERVISOR_EMAILS, who can't be removed in the app
 }
 
 /** Who a group's members are; it only changes the wording about them */
@@ -36,15 +37,24 @@ export interface Mark {
 
 export interface Data {
   me: Staff;
-  staff: Staff[]; // managers the user may see (all for the supervisor, herself for a manager)
+  staff: Staff[]; // everyone for a supervisor (supervisors and managers), herself for a manager
   groups: Group[];
   members: Member[]; // array order is the numbering order within each group
   records: WirdRecord[];
   marks: Mark[];
 }
 
-/** Supervisors are not stored in D1; they all share this id */
-export const SUPERVISOR_ID = "supervisor";
+/** Main supervisors are not stored in D1; each gets this id from her email */
+export function mainSupervisorId(email: string): string {
+  return `main:${email}`;
+}
+
+/** A person can be removed unless she is a main supervisor or the last supervisor */
+export function canRemoveStaff(data: Data, person: Staff): boolean {
+  if (person.main) return false;
+  if (person.role !== "supervisor") return true;
+  return data.staff.filter((s) => s.role === "supervisor").length > 1;
+}
 
 export function canSeeGroup(user: Staff, group: Group): boolean {
   return user.role === "supervisor" || group.managerId === user.id;

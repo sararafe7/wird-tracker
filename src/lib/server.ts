@@ -1,5 +1,12 @@
 import type { Op } from "@/lib/ops";
-import { type Data, type Group, type Mark, type Staff, SUPERVISOR_ID } from "@/lib/store";
+import {
+  type Data,
+  type Group,
+  type Mark,
+  mainSupervisorId,
+  type Role,
+  type Staff,
+} from "@/lib/store";
 import type { Member, WirdRecord } from "@/lib/wird";
 
 /** Server-only D1 access and permission checks */
@@ -24,7 +31,8 @@ export function supervisorEmails(env: Env): string[] {
 
 /**
  * Who the signed-in user is in this app, or null when nobody has added her.
- * A manager's Hasanat account is linked to her staff row the first time she signs in with its email.
+ * The main supervisors come from SUPERVISOR_EMAILS; everyone else is a staff row (manager or supervisor),
+ * linked to her Hasanat account the first time she signs in with its email.
  */
 export async function getActor(
   db: D1Database,
@@ -33,24 +41,31 @@ export async function getActor(
 ): Promise<Staff | null> {
   const email = (user.email ?? "").trim().toLowerCase();
   if (email && supervisorEmails(env).includes(email)) {
-    return { id: SUPERVISOR_ID, name: user.name || email, role: "supervisor", email, linked: true };
+    return {
+      id: mainSupervisorId(email),
+      name: user.name || email,
+      role: "supervisor",
+      email,
+      linked: true,
+      main: true,
+    };
   }
   const row = await db
     .prepare(
-      `SELECT id, name, email, user_id FROM staff
+      `SELECT id, name, email, role, user_id FROM staff
        WHERE user_id = ?1 OR (user_id IS NULL AND email = ?2 AND ?2 <> '')
        ORDER BY user_id IS NULL LIMIT 1`,
     )
     .bind(user.id, email)
-    .first<{ id: string; name: string; email: string; user_id: string | null }>();
+    .first<{ id: string; name: string; email: string; role: Role; user_id: string | null }>();
   if (!row) return null;
   if (!row.user_id) {
     await db.prepare("UPDATE staff SET user_id = ? WHERE id = ?").bind(user.id, row.id).run();
   }
-  return { id: row.id, name: row.name, role: "manager", email: row.email, linked: true };
+  return { id: row.id, name: row.name, role: row.role, email: row.email, linked: true };
 }
 
-export async function loadData(db: D1Database, me: Staff): Promise<Data> {
+export async function loadData(db: D1Database, env: Env, me: Staff): Promise<Data> {
   const sup = me.role === "supervisor";
   // Managers only get rows from their own groups
   const groupFilter = sup ? "" : "WHERE g.manager_id = ?1";
@@ -59,9 +74,11 @@ export async function loadData(db: D1Database, me: Staff): Promise<Data> {
   const [staff, groups, members, records, marks] = await db.batch([
     sup
       ? db.prepare(
-          "SELECT id, name, email, user_id IS NOT NULL AS linked FROM staff ORDER BY created_at",
+          "SELECT id, name, email, role, user_id IS NOT NULL AS linked FROM staff ORDER BY created_at",
         )
-      : db.prepare("SELECT id, name, email, 1 AS linked FROM staff WHERE id = ?1").bind(me.id),
+      : db
+          .prepare("SELECT id, name, email, role, 1 AS linked FROM staff WHERE id = ?1")
+          .bind(me.id),
     bind(
       `SELECT g.id, g.name, g.manager_id, g.audience FROM groups g ${groupFilter} ORDER BY g.created_at`,
     ),
@@ -86,14 +103,27 @@ export async function loadData(db: D1Database, me: Staff): Promise<Data> {
   const staffList: Staff[] = rows(staff).map((s) => ({
     id: String(s.id),
     name: String(s.name),
-    role: "manager",
+    role: s.role === "supervisor" ? "supervisor" : "manager",
     email: String(s.email),
     linked: Boolean(s.linked),
   }));
+  // Main supervisors other than her are known only by email
+  const mains: Staff[] = supervisorEmails(env).map((email) =>
+    email === me.email && me.main
+      ? me
+      : {
+          id: mainSupervisorId(email),
+          name: email,
+          role: "supervisor",
+          email,
+          linked: true,
+          main: true,
+        },
+  );
 
   return {
     me,
-    staff: sup ? [me, ...staffList] : staffList,
+    staff: sup ? [...mains, ...staffList] : staffList,
     groups: rows(groups).map(
       (g): Group => ({
         id: String(g.id),
@@ -154,7 +184,7 @@ function requireSupervisor(me: Staff) {
   if (me.role !== "supervisor") throw new HttpError(403, "supervisor only");
 }
 
-export async function runOp(db: D1Database, me: Staff, op: Op): Promise<void> {
+export async function runOp(db: D1Database, env: Env, me: Staff, op: Op): Promise<void> {
   switch (op.type) {
     case "recordSet":
       await requireMember(db, me, op.memberId);
@@ -230,7 +260,10 @@ export async function runOp(db: D1Database, me: Staff, op: Op): Promise<void> {
       requireSupervisor(me);
       if (
         op.managerId &&
-        !(await db.prepare("SELECT 1 FROM staff WHERE id = ?").bind(op.managerId).first())
+        !(await db
+          .prepare("SELECT 1 FROM staff WHERE id = ? AND role = 'manager'")
+          .bind(op.managerId)
+          .first())
       ) {
         throw new HttpError(400, "unknown manager");
       }
@@ -249,17 +282,36 @@ export async function runOp(db: D1Database, me: Staff, op: Op): Promise<void> {
       return;
     case "staffAdd": {
       requireSupervisor(me);
-      const taken = await db.prepare("SELECT 1 FROM staff WHERE email = ?").bind(op.email).first();
+      if (op.id.startsWith(mainSupervisorId(""))) throw new HttpError(400, "reserved id");
+      const taken =
+        supervisorEmails(env).includes(op.email) ||
+        (await db.prepare("SELECT 1 FROM staff WHERE email = ?").bind(op.email).first());
       if (taken) throw new HttpError(409, "email already added");
       await db
-        .prepare("INSERT INTO staff (id, name, email) VALUES (?, ?, ?)")
-        .bind(op.id, op.name, op.email)
+        .prepare("INSERT INTO staff (id, name, email, role) VALUES (?, ?, ?, ?)")
+        .bind(op.id, op.name, op.email, op.role)
         .run();
       return;
     }
-    case "staffRemove":
+    case "staffRemove": {
       requireSupervisor(me);
-      await db.prepare("DELETE FROM staff WHERE id = ?").bind(op.id).run();
+      // Main supervisors live in SUPERVISOR_EMAILS, which only the maintainers change
+      if (op.id.startsWith(mainSupervisorId(""))) throw new HttpError(403, "main supervisor");
+      // One statement, so two supervisors removing each other at once still leave one
+      const { meta } = await db
+        .prepare(
+          `DELETE FROM staff WHERE id = ?1 AND (role <> 'supervisor'
+             OR ?2 + (SELECT COUNT(*) FROM staff WHERE role = 'supervisor') > 1)`,
+        )
+        .bind(op.id, supervisorEmails(env).length)
+        .run();
+      if (
+        meta.changes === 0 &&
+        (await db.prepare("SELECT 1 FROM staff WHERE id = ?").bind(op.id).first())
+      ) {
+        throw new HttpError(403, "last supervisor");
+      }
       return;
+    }
   }
 }

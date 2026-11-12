@@ -10,7 +10,7 @@ export const POST: APIRoute = async ({ locals, url, request }) => {
   const parsed = opSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return json({ error: "invalid change" }, 400);
   try {
-    await runOp(ctx.db, ctx.me, parsed.data);
+    await runOp(ctx.db, locals.runtime.env, ctx.me, parsed.data);
     return json({ ok: true });
   } catch (error) {
     if (error instanceof HttpError) return json({ error: error.message }, error.status);

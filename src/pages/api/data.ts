@@ -6,5 +6,5 @@ import { loadData } from "@/lib/server";
 export const GET: APIRoute = async ({ locals, url }) => {
   const ctx = await resolveActor(locals, url);
   if ("response" in ctx) return ctx.response;
-  return json({ ...(await loadData(ctx.db, ctx.me)), dev: ctx.dev });
+  return json({ ...(await loadData(ctx.db, locals.runtime.env, ctx.me)), dev: ctx.dev });
 };

@@ -51,6 +51,7 @@ export const opSchema = z.discriminatedUnion("type", [
     id,
     name,
     email: z.string().trim().toLowerCase().email().max(254),
+    role: z.enum(["manager", "supervisor"]),
   }),
   z.object({ type: z.literal("staffRemove"), id }),
 ]);
@@ -113,7 +114,7 @@ export function applyOp(data: Data, op: Op): Data {
         ...data,
         staff: [
           ...data.staff,
-          { id: op.id, name: op.name, role: "manager", email: op.email, linked: false },
+          { id: op.id, name: op.name, role: op.role, email: op.email, linked: false },
         ],
       };
     case "staffRemove":

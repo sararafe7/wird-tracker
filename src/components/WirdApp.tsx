@@ -11,9 +11,11 @@ import { newId } from "@/lib/id";
 import { applyOp, type Op } from "@/lib/ops";
 import {
   type Audience,
+  canRemoveStaff,
   type Data,
   type Group,
   groupMembers,
+  type Role,
   type Staff,
   visibleGroups,
 } from "@/lib/store";
@@ -109,7 +111,6 @@ function Home({
   today: string;
 }) {
   const [groupForm, setGroupForm] = useState<GroupForm | null>(null);
-  const [manager, setManager] = useState({ name: "", email: "" });
 
   const user = data.me;
   const groups = visibleGroups(data);
@@ -136,24 +137,6 @@ function Home({
     if (!confirm(fill(t["groups.delete_confirm"], { name: g.name }))) return;
     apply({ type: "groupRemove", id: g.id });
     setGroupForm(null);
-  }
-
-  function addManager(e: { preventDefault(): void }) {
-    e.preventDefault();
-    const name = manager.name.trim();
-    const email = manager.email.trim().toLowerCase();
-    if (!name || !email) return;
-    if (data.staff.some((s) => s.email === email)) {
-      reportError("email_taken", new Error(email));
-      return;
-    }
-    apply({ type: "staffAdd", id: newId(), name, email });
-    setManager({ name: "", email: "" });
-  }
-
-  function removeManager(s: Staff) {
-    if (!confirm(fill(t["staff.delete_confirm"], { name: s.name }))) return;
-    apply({ type: "staffRemove", id: s.id });
   }
 
   return (
@@ -324,72 +307,129 @@ function Home({
         )}
       </section>
 
-      {isSupervisor && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-slate-900">{t["staff.title"]}</h2>
-          {managers.length > 0 && (
-            <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white">
-              {managers.map((s) => {
-                const count = data.groups.filter((g) => g.managerId === s.id).length;
-                return (
-                  <li key={s.id} className="flex items-center justify-between gap-2 px-4 py-2">
-                    <span className="min-w-0">
-                      <span className="block truncate">
-                        {s.name}
-                        <span className="ms-2 text-xs text-stone-500">
-                          {fill(t["staff.groups_count"], { n: count })}
-                        </span>
-                      </span>
-                      <span className="block truncate text-xs text-stone-500" dir="ltr">
-                        {s.email}
-                      </span>
-                      {!s.linked && (
-                        <span className="block text-xs text-amber-700">
-                          {t["staff.not_signed_in"]}
-                        </span>
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeManager(s)}
-                      aria-label={fill(t["staff.delete"], { name: s.name })}
-                      className="rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <form onSubmit={addManager} className="card space-y-3 !p-4">
-            <input
-              required
-              value={manager.name}
-              onChange={(e) => setManager({ ...manager, name: e.target.value })}
-              placeholder={t["staff.name_placeholder"]}
-              aria-label={t["staff.name_placeholder"]}
-              className={inputClass}
-            />
-            <input
-              required
-              type="email"
-              dir="ltr"
-              value={manager.email}
-              onChange={(e) => setManager({ ...manager, email: e.target.value })}
-              placeholder={t["staff.email_placeholder"]}
-              aria-label={t["staff.email_placeholder"]}
-              className={cn(inputClass, "text-end")}
-            />
-            <p className="text-xs text-stone-500">{t["staff.email_hint"]}</p>
-            <button type="submit" className="btn-secondary w-full">
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-              {t["staff.add"]}
-            </button>
-          </form>
-        </section>
-      )}
+      {isSupervisor && <StaffSection t={t} data={data} apply={apply} kind="manager" />}
+      {isSupervisor && <StaffSection t={t} data={data} apply={apply} kind="supervisor" />}
     </div>
+  );
+}
+
+/** The supervisor's list of managers or of supervisors, with a form to add one by email */
+function StaffSection({
+  t,
+  data,
+  apply,
+  kind,
+}: {
+  t: Strings;
+  data: Data;
+  apply: (op: Op) => void;
+  kind: Role;
+}) {
+  const [form, setForm] = useState({ name: "", email: "" });
+  const people = data.staff.filter((s) => s.role === kind);
+  const managers = kind === "manager";
+
+  function add(e: { preventDefault(): void }) {
+    e.preventDefault();
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+    if (!name || !email) return;
+    if (data.staff.some((s) => s.email === email)) {
+      reportError("email_taken", new Error(email));
+      return;
+    }
+    apply({ type: "staffAdd", id: newId(), name, email, role: kind });
+    setForm({ name: "", email: "" });
+  }
+
+  function remove(s: Staff) {
+    const message =
+      s.id === data.me.id
+        ? t["supervisors.delete_self_confirm"]
+        : fill(t[managers ? "staff.delete_confirm" : "supervisors.delete_confirm"], {
+            name: s.name,
+          });
+    if (!confirm(message)) return;
+    apply({ type: "staffRemove", id: s.id });
+  }
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold text-slate-900">
+        {t[managers ? "staff.title" : "supervisors.title"]}
+      </h2>
+      {!managers && <p className="text-sm text-stone-600">{t["supervisors.hint"]}</p>}
+      {people.length > 0 && (
+        <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white">
+          {people.map((s) => (
+            <li key={s.id} className="flex items-center justify-between gap-2 px-4 py-2">
+              <span className="min-w-0">
+                <span className="block truncate" dir={s.name === s.email ? "ltr" : undefined}>
+                  {s.name}
+                  {managers && (
+                    <span className="ms-2 text-xs text-stone-500">
+                      {fill(t["staff.groups_count"], {
+                        n: data.groups.filter((g) => g.managerId === s.id).length,
+                      })}
+                    </span>
+                  )}
+                </span>
+                {s.name !== s.email && (
+                  <span className="block truncate text-xs text-stone-500" dir="ltr">
+                    {s.email}
+                  </span>
+                )}
+                {(s.main || s.id === data.me.id) && (
+                  <span className="block text-xs text-stone-500">
+                    {[s.main && t["supervisors.main"], s.id === data.me.id && t["staff.you"]]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                )}
+                {!s.linked && (
+                  <span className="block text-xs text-amber-700">{t["staff.not_signed_in"]}</span>
+                )}
+              </span>
+              {canRemoveStaff(data, s) && (
+                <button
+                  type="button"
+                  onClick={() => remove(s)}
+                  aria-label={fill(t["staff.delete"], { name: s.name })}
+                  className="rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={add} className="card space-y-3 !p-4">
+        <input
+          required
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder={t["staff.name_placeholder"]}
+          aria-label={t["staff.name_placeholder"]}
+          className={inputClass}
+        />
+        <input
+          required
+          type="email"
+          dir="ltr"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          placeholder={t["staff.email_placeholder"]}
+          aria-label={t["staff.email_placeholder"]}
+          className={cn(inputClass, "text-end")}
+        />
+        <p className="text-xs text-stone-500">{t["staff.email_hint"]}</p>
+        <button type="submit" className="btn-secondary w-full">
+          <UserPlus className="h-4 w-4" aria-hidden="true" />
+          {t[managers ? "staff.add" : "supervisors.add"]}
+        </button>
+      </form>
+    </section>
   );
 }
 
@@ -432,12 +472,16 @@ function Screens({ t }: { t: Strings }) {
   const apply = useCallback(
     (op: Op) => {
       setSession((s) => (s?.kind === "ready" ? { ...s, data: applyOp(s.data, op) } : s));
-      sendOp(op).catch((error) => {
-        if (error instanceof ApiError && error.status === 409) reportError("email_taken", error);
-        else if (error instanceof ApiError && error.status === 403) reportError("forbidden", error);
-        else reportError("save", error);
-        reload();
-      });
+      sendOp(op)
+        // Removing someone may remove her own access, so fetch what she can see now
+        .then(() => op.type === "staffRemove" && reload())
+        .catch((error) => {
+          if (error instanceof ApiError && error.status === 409) reportError("email_taken", error);
+          else if (error instanceof ApiError && error.status === 403)
+            reportError("forbidden", error);
+          else reportError("save", error);
+          reload();
+        });
     },
     [reload],
   );
