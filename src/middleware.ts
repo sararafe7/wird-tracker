@@ -1,4 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
+import { previewUser } from "./lib/preview-auth";
 
 /** Local-only stand-in for sign-in, set by the "who are you" switch */
 export const DEV_EMAIL_COOKIE = "wird_dev_email";
@@ -7,6 +8,7 @@ export const DEV_EMAIL_COOKIE = "wird_dev_email";
  * Auth middleware — verifies sessions via auth.hasanat.dev.
  *
  * Uses the shared .hasanat.dev session cookie, so sign-in only works on *.hasanat.dev.
+ * On a Hasanat preview (pages.dev, behind Cloudflare Access), the email Access verified signs her in instead.
  * In development, the wird_dev_email cookie pretends to be that signed-in email instead;
  * import.meta.env.DEV is false in production builds, so that branch is removed there.
  */
@@ -32,7 +34,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
 
-  if (needsAuth && cookie.includes("authjs.session-token")) {
+  // Previews only: see src/lib/preview-auth.ts. Elsewhere this returns null without any network request.
+  if (needsAuth) {
+    context.locals.user = await previewUser(context.request, context.locals.runtime?.env ?? {});
+  }
+
+  if (needsAuth && !context.locals.user && cookie.includes("authjs.session-token")) {
     try {
       const res = await fetch("https://auth.hasanat.dev/api/auth/session", {
         headers: { cookie },
