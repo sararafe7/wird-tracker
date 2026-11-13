@@ -16,7 +16,8 @@ import type { Member, WirdRecord } from "@/lib/wird";
  * Who may do what:
  * - App admins (SUPERVISOR_EMAILS) see every initiative's name, supervisors and counts, and can suspend or
  *   delete it. They see nothing inside an initiative unless they supervise it or manage one of its groups.
- * - A supervisor of an initiative sees and changes all of it: its groups, their managers, its supervisors.
+ * - A supervisor of an initiative sees and changes all of it: its name, its groups, their managers,
+ *   its supervisors. App admins can also rename any initiative.
  * - A manager sees and changes only her own groups.
  * - Nobody sees or changes anything in a suspended initiative.
  */
@@ -476,6 +477,15 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
         .prepare("INSERT INTO initiative_supervisors (initiative_id, staff_id) VALUES (?, ?)")
         .bind(op.id, staffId)
         .run();
+      return;
+    }
+    case "initiativeRename": {
+      if (!actor.admin) await requireSupervisorOf(db, actor, op.id);
+      const { meta } = await db
+        .prepare("UPDATE initiatives SET name = ? WHERE id = ?")
+        .bind(op.name, op.id)
+        .run();
+      if (meta.changes === 0) throw new HttpError(404, "initiative not found");
       return;
     }
     case "supervisorAdd": {

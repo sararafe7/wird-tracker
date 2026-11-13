@@ -267,6 +267,7 @@ function InitiativeSection({
   today: string;
 }) {
   const [groupForm, setGroupForm] = useState<GroupForm | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const supervisor = initiative.role === "supervisor";
   const groups = initiativeGroups(data, initiative.id);
 
@@ -321,12 +322,37 @@ function InitiativeSection({
 
   return (
     <section className="space-y-3" aria-labelledby={`initiative-${initiative.id}`}>
-      <div className="flex items-baseline justify-between gap-2">
-        <h1 id={`initiative-${initiative.id}`} className="text-2xl font-bold text-slate-900">
-          {initiative.name}
-        </h1>
-        <span className="shrink-0 text-sm text-stone-500">{t[`role.${initiative.role}`]}</span>
-      </div>
+      {renaming ? (
+        <RenameForm
+          t={t}
+          name={initiative.name}
+          label={t["initiative.name"]}
+          onSave={(name) => {
+            apply({ type: "initiativeRename", id: initiative.id, name });
+            setRenaming(false);
+          }}
+          onCancel={() => setRenaming(false)}
+        />
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <h1 id={`initiative-${initiative.id}`} className="text-2xl font-bold text-slate-900">
+            {initiative.name}
+          </h1>
+          <span className="flex shrink-0 items-center gap-1 text-sm text-stone-500">
+            {t[`role.${initiative.role}`]}
+            {supervisor && !initiative.suspended && (
+              <button
+                type="button"
+                onClick={() => setRenaming(true)}
+                aria-label={fill(t["initiative.rename"], { name: initiative.name })}
+                className="rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-slate-700"
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+          </span>
+        </div>
+      )}
 
       {initiative.suspended ? (
         <p className="card text-stone-600">{t["initiative.suspended"]}</p>
@@ -610,7 +636,51 @@ function SupervisorsSection({
   );
 }
 
-/** App admins: every initiative's name, supervisors and counts, with suspend and delete */
+/** A one-field form to rename an initiative */
+function RenameForm({
+  t,
+  name,
+  label,
+  onSave,
+  onCancel,
+}: {
+  t: Strings;
+  name: string;
+  label: string;
+  onSave: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(name);
+  return (
+    <form
+      className="flex flex-wrap items-end gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const trimmed = value.trim();
+        if (trimmed && trimmed !== name) onSave(trimmed);
+        else onCancel();
+      }}
+    >
+      <label className="block min-w-0 flex-1 space-y-1">
+        <span className="text-sm font-medium">{label}</span>
+        <input
+          required
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className={inputClass}
+        />
+      </label>
+      <button type="submit" className="btn-primary">
+        {t["common.save"]}
+      </button>
+      <button type="button" className="btn-secondary" onClick={onCancel}>
+        {t["common.cancel"]}
+      </button>
+    </form>
+  );
+}
+
+/** App admins: every initiative's name, supervisors and counts, with rename, suspend and delete */
 function AdminPage({
   t,
   onBack,
@@ -622,6 +692,7 @@ function AdminPage({
 }) {
   const [list, setList] = useState<InitiativeSummary[] | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; typed: string } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetchSummaries()
@@ -638,6 +709,7 @@ function AdminPage({
       reportError(error instanceof ApiError && error.status === 403 ? "forbidden" : "save", error);
     }
     setDeleting(null);
+    setRenaming(null);
     load();
     // She may supervise the initiative too, so her own view can change
     onChanged();
@@ -666,14 +738,35 @@ function AdminPage({
       <ul className="space-y-3">
         {list?.map((i) => (
           <li key={i.id} className="card space-y-3 !p-4">
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="min-w-0 truncate text-lg font-semibold text-slate-900">{i.name}</h2>
-              {i.suspended && (
-                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                  {t["admin.suspended"]}
+            {renaming === i.id ? (
+              <RenameForm
+                t={t}
+                name={i.name}
+                label={t["initiative.name"]}
+                onSave={(name) => send({ type: "initiativeRename", id: i.id, name })}
+                onCancel={() => setRenaming(null)}
+              />
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="min-w-0 truncate text-lg font-semibold text-slate-900">{i.name}</h2>
+                <span className="flex shrink-0 items-center gap-1">
+                  {i.suspended && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                      {t["admin.suspended"]}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setRenaming(i.id)}
+                    aria-label={fill(t["initiative.rename"], { name: i.name })}
+                    title={t["admin.rename"]}
+                    className="rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-slate-700"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
+                  </button>
                 </span>
-              )}
-            </div>
+              </div>
+            )}
             <p className="text-sm text-stone-600">
               {fill(t["admin.groups"], { n: i.groups })}
               {" · "}

@@ -52,6 +52,8 @@ export const opSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("groupRemove"), id }),
   z.object({ type: z.literal("initiativeCreate"), id, name }),
+  // Its supervisors, or any app admin
+  z.object({ type: z.literal("initiativeRename"), id, name }),
   z.object({ type: z.literal("supervisorAdd"), initiativeId: id, ...person.shape }),
   z.object({ type: z.literal("supervisorRemove"), initiativeId: id, personId: id }),
   // App admins only
