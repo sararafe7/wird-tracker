@@ -3,14 +3,18 @@ import { type Data, moveMember, setMark, withoutMembers } from "@/lib/store";
 import { removeRecord, setRecord, TOTAL_PAGES } from "@/lib/wird";
 
 /**
- * Every change the app can make. The client applies it at once with applyOp;
- * the server validates it with opSchema, checks permissions, and writes it to D1.
+ * Every change the app can make. The server validates it with opSchema, checks permissions,
+ * and writes it to D1. Daily changes the client also applies at once with applyOp;
+ * changes to initiatives, groups and supervisors it sends and then reloads (see reloadsAfter).
  */
 
 const id = z.string().min(1).max(64);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const name = z.string().trim().min(1).max(80);
 const page = z.number().int().min(1).max(TOTAL_PAGES);
+const email = z.string().trim().toLowerCase().email().max(254);
+/** Someone named by the supervisor; the server finds her by email or adds her */
+const person = z.object({ name, email });
 
 export const opSchema = z.discriminatedUnion("type", [
   z.object({
@@ -41,22 +45,38 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("groupSave"),
     id,
+    initiativeId: id,
     name,
-    managerId: id.nullable(),
+    manager: person.nullable(),
     audience: z.enum(["girls", "boys"]),
   }),
   z.object({ type: z.literal("groupRemove"), id }),
-  z.object({
-    type: z.literal("staffAdd"),
-    id,
-    name,
-    email: z.string().trim().toLowerCase().email().max(254),
-    role: z.enum(["manager", "supervisor"]),
-  }),
-  z.object({ type: z.literal("staffRemove"), id }),
+  z.object({ type: z.literal("initiativeCreate"), id, name }),
+  z.object({ type: z.literal("supervisorAdd"), initiativeId: id, ...person.shape }),
+  z.object({ type: z.literal("supervisorRemove"), initiativeId: id, personId: id }),
+  // App admins only
+  z.object({ type: z.literal("initiativeSuspend"), id, suspended: z.boolean() }),
+  // The typed name must match, so a wrong id can't delete the wrong initiative
+  z.object({ type: z.literal("initiativeDelete"), id, name }),
 ]);
 
 export type Op = z.infer<typeof opSchema>;
+
+/** Changes applyOp shows at once; for every other change the client waits for the server, then reloads */
+const INSTANT = new Set<Op["type"]>([
+  "recordSet",
+  "recordRemove",
+  "markSet",
+  "memberAdd",
+  "memberUpdate",
+  "memberRemove",
+  "memberMove",
+  "groupRemove",
+]);
+
+export function reloadsAfter(op: Op): boolean {
+  return !INSTANT.has(op.type);
+}
 
 /** The client-side effect of an op, matching what the server writes */
 export function applyOp(data: Data, op: Op): Data {
@@ -95,33 +115,11 @@ export function applyOp(data: Data, op: Op): Data {
       return withoutMembers(data, new Set([op.id]));
     case "memberMove":
       return { ...data, members: moveMember(data.members, op.id, op.dir) };
-    case "groupSave": {
-      const group = { id: op.id, name: op.name, managerId: op.managerId, audience: op.audience };
-      const exists = data.groups.some((g) => g.id === op.id);
-      return {
-        ...data,
-        groups: exists
-          ? data.groups.map((g) => (g.id === op.id ? group : g))
-          : [...data.groups, group],
-      };
-    }
     case "groupRemove": {
       const gone = new Set(data.members.filter((m) => m.groupId === op.id).map((m) => m.id));
       return { ...withoutMembers(data, gone), groups: data.groups.filter((g) => g.id !== op.id) };
     }
-    case "staffAdd":
-      return {
-        ...data,
-        staff: [
-          ...data.staff,
-          { id: op.id, name: op.name, role: op.role, email: op.email, linked: false },
-        ],
-      };
-    case "staffRemove":
-      return {
-        ...data,
-        staff: data.staff.filter((s) => s.id !== op.id),
-        groups: data.groups.map((g) => (g.managerId === op.id ? { ...g, managerId: null } : g)),
-      };
+    default:
+      return data;
   }
 }

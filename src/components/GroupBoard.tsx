@@ -23,7 +23,6 @@ import {
   groupMembers,
   hasMark,
   type MarkKind,
-  type Staff,
 } from "@/lib/store";
 import {
   clampDaily,
@@ -56,7 +55,6 @@ interface Props {
   data: Data;
   apply: (op: Op) => void;
   group: Group;
-  user: Staff;
   today: string;
   onBack: () => void;
   onTable: () => void;
@@ -68,7 +66,6 @@ export default function GroupBoard({
   data,
   apply,
   group,
-  user,
   today,
   onBack,
   onTable,
@@ -86,7 +83,7 @@ export default function GroupBoard({
 
   const { records, marks } = data;
   const members = groupMembers(data, group.id);
-  const canManage = canManageMembers(user, group);
+  const canManage = canManageMembers(data, group);
   const theme = SHARE_THEMES[group.audience];
 
   function record(m: Member, value: number | null) {

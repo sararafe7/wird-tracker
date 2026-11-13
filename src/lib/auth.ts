@@ -14,9 +14,13 @@ export function getSignInUrl(callbackUrl?: string): string {
   return `${AUTH_URL}/api/auth/signin?callbackUrl=${encodeURIComponent(callback)}`;
 }
 
-/** Redirect to sign out */
-export function getSignOutUrl(): string {
-  return `${AUTH_URL}/api/auth/signout`;
+/**
+ * Redirect to sign out. auth.hasanat.dev asks to confirm, then returns to callbackUrl;
+ * without it the user is left on the auth service's own page.
+ */
+export function getSignOutUrl(callbackUrl?: string): string {
+  const url = `${AUTH_URL}/api/auth/signout`;
+  return callbackUrl ? `${url}?callbackUrl=${encodeURIComponent(callbackUrl)}` : url;
 }
 
 /** Check if a user object represents an admin */

@@ -2,25 +2,57 @@ import type { Member, WirdRecord } from "@/lib/wird";
 
 /**
  * App data as the server sends it, mirroring the D1 tables
- * (staff, groups, members, records, marks), limited to what the signed-in user may see.
+ * (initiatives, initiative_supervisors, staff, groups, members, records, marks),
+ * limited to what the signed-in user may see: the initiatives she supervises and the groups she manages.
  */
 
+/** Her part in an initiative: supervisor of all of it, or manager of some of its groups */
 export type Role = "supervisor" | "manager";
 
-export interface Staff {
+/** The signed-in user; staffId stays null until she is invited or creates an initiative */
+export interface Me {
+  staffId: string | null;
+  name: string;
+  email: string;
+  admin: boolean; // her email is in SUPERVISOR_EMAILS
+  canCreate: boolean; // under the limit on initiatives she may create
+}
+
+/** Someone added by email: a supervisor of an initiative, or a group's manager */
+export interface Person {
+  id: string;
+  name: string;
+  email: string;
+  linked: boolean; // has signed in at least once
+}
+
+export interface Initiative {
   id: string;
   name: string;
   role: Role;
-  email: string;
-  linked: boolean; // has signed in at least once
-  main?: boolean; // a main supervisor from SUPERVISOR_EMAILS, who can't be removed in the app
+  suspended: boolean; // closed by an app admin; nothing inside it is sent
+  supervisorIds: string[]; // only filled in for initiatives she supervises
 }
+
+/** What app admins see of every initiative: no member names or records */
+export interface InitiativeSummary {
+  id: string;
+  name: string;
+  suspended: boolean;
+  supervisors: { name: string; email: string }[];
+  groups: number;
+  members: number;
+}
+
+/** Initiatives one person may create; app admins have no limit */
+export const INITIATIVE_LIMIT = 5;
 
 /** Who a group's members are; it only changes the wording about them */
 export type Audience = "girls" | "boys";
 
 export interface Group {
   id: string;
+  initiativeId: string;
   name: string;
   managerId: string | null;
   audience: Audience;
@@ -36,37 +68,31 @@ export interface Mark {
 }
 
 export interface Data {
-  me: Staff;
-  staff: Staff[]; // everyone for a supervisor (supervisors and managers), herself for a manager
-  groups: Group[];
+  me: Me;
+  initiatives: Initiative[];
+  people: Person[]; // supervisors and managers of the initiatives she supervises, and herself
+  groups: Group[]; // every group she may open, and so manage
   members: Member[]; // array order is the numbering order within each group
   records: WirdRecord[];
   marks: Mark[];
 }
 
-/** Main supervisors are not stored in D1; each gets this id from her email */
-export function mainSupervisorId(email: string): string {
-  return `main:${email}`;
+export function initiativeGroups(data: Data, initiativeId: string): Group[] {
+  return data.groups.filter((g) => g.initiativeId === initiativeId);
 }
 
-/** A person can be removed unless she is a main supervisor or the last supervisor */
-export function canRemoveStaff(data: Data, person: Staff): boolean {
-  if (person.main) return false;
-  if (person.role !== "supervisor") return true;
-  return data.staff.filter((s) => s.role === "supervisor").length > 1;
+export function personName(data: Data, id: string | null): string | undefined {
+  return data.people.find((p) => p.id === id)?.name;
 }
 
-export function canSeeGroup(user: Staff, group: Group): boolean {
-  return user.role === "supervisor" || group.managerId === user.id;
+/** Adding, editing, reordering and removing members: anyone who may open the group */
+export function canManageMembers(data: Data, group: Group): boolean {
+  return data.groups.some((g) => g.id === group.id);
 }
 
-/** Adding, editing, reordering and removing members: the group's manager, or the supervisor anywhere */
-export function canManageMembers(user: Staff, group: Group): boolean {
-  return canSeeGroup(user, group);
-}
-
-export function visibleGroups(data: Data): Group[] {
-  return data.groups.filter((g) => canSeeGroup(data.me, g));
+/** An initiative always keeps at least one supervisor */
+export function canRemoveSupervisor(initiative: Initiative): boolean {
+  return initiative.supervisorIds.length > 1;
 }
 
 export function groupMembers(data: Data, groupId: string): Member[] {
