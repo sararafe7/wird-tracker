@@ -22,6 +22,10 @@ export default defineConfig({
   },
 
   vite: {
+    // `astro dev` keeps its own dependency cache: `astro check` and `astro build` re-optimize
+    // dependencies too, and in a shared cache they replaced the files a running dev server
+    // was serving (504 "Outdated Optimize Dep", leaving the app island blank)
+    cacheDir: process.argv.includes("dev") ? "node_modules/.vite-dev" : "node_modules/.vite",
     plugins: [tailwindcss()],
     ssr: {
       noExternal: ["clsx", "tailwind-merge"],
