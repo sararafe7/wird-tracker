@@ -22,6 +22,9 @@ export class HttpError extends Error {
 
 type SignedInUser = NonNullable<App.Locals["user"]>;
 
+/** Ids that src/lib/preview-auth.ts gives users signed in on a Hasanat preview */
+const PREVIEW_ID_PREFIX = "preview:";
+
 export function supervisorEmails(env: Env): string[] {
   return (env.SUPERVISOR_EMAILS ?? "")
     .split(",")
@@ -33,6 +36,8 @@ export function supervisorEmails(env: Env): string[] {
  * Who the signed-in user is in this app, or null when nobody has added her.
  * The main supervisors come from SUPERVISOR_EMAILS; everyone else is a staff row (manager or supervisor),
  * linked to her Hasanat account the first time she signs in with its email.
+ * Preview sign-ins (src/lib/preview-auth.ts) match by email and never link a row, so a preview
+ * sharing the production database could not tie a row to an id that production never sees.
  */
 export async function getActor(
   db: D1Database,
@@ -50,16 +55,25 @@ export async function getActor(
       main: true,
     };
   }
-  const row = await db
-    .prepare(
-      `SELECT id, name, email, role, user_id FROM staff
-       WHERE user_id = ?1 OR (user_id IS NULL AND email = ?2 AND ?2 <> '')
-       ORDER BY user_id IS NULL LIMIT 1`,
-    )
-    .bind(user.id, email)
-    .first<{ id: string; name: string; email: string; role: Role; user_id: string | null }>();
+  const preview = user.id.startsWith(PREVIEW_ID_PREFIX);
+  type Row = { id: string; name: string; email: string; role: Role; user_id: string | null };
+  const row = preview
+    ? await db
+        .prepare("SELECT id, name, email, role, user_id FROM staff WHERE email = ?")
+        .bind(email)
+        .first<Row>()
+    : await db
+        .prepare(
+          // A row linked to a preview id counts as unlinked, so her real account takes it over
+          `SELECT id, name, email, role, user_id FROM staff
+           WHERE user_id = ?1
+              OR ((user_id IS NULL OR user_id LIKE '${PREVIEW_ID_PREFIX}%') AND email = ?2 AND ?2 <> '')
+           ORDER BY user_id = ?1 DESC LIMIT 1`,
+        )
+        .bind(user.id, email)
+        .first<Row>();
   if (!row) return null;
-  if (!row.user_id) {
+  if (!preview && row.user_id !== user.id) {
     await db.prepare("UPDATE staff SET user_id = ? WHERE id = ?").bind(user.id, row.id).run();
   }
   return { id: row.id, name: row.name, role: row.role, email: row.email, linked: true };
