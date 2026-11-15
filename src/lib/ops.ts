@@ -68,6 +68,15 @@ export const opSchema = z.discriminatedUnion("type", [
       .max(IMAGE_MAX_DATA_URL)
       .regex(/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/]+=*$/)
       .nullable(),
+    // Show it without the tinted circle on screenshot headers (light logos)
+    plain: z.boolean().optional(),
+  }),
+  // The same option for an image already uploaded
+  z.object({
+    type: z.literal("imagePlain"),
+    target: z.enum(["initiative", "group"]),
+    id,
+    plain: z.boolean(),
   }),
   z.object({ type: z.literal("supervisorAdd"), initiativeId: id, ...person.shape }),
   z.object({ type: z.literal("supervisorRemove"), initiativeId: id, personId: id }),

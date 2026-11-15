@@ -33,6 +33,7 @@ export interface Initiative {
   suspended: boolean; // closed by an app admin; nothing inside it is sent
   supervisorIds: string[]; // only filled in for initiatives she supervises
   logo: string | null; // version of its logo, or null for none
+  logoPlain: boolean; // shown without the tinted circle on screenshot headers
 }
 
 /** What app admins see of every initiative: no member names or records */
@@ -58,6 +59,7 @@ export interface Group {
   managerId: string | null;
   audience: Audience;
   icon: string | null; // version of its icon, or null for none
+  iconPlain: boolean; // shown without the tinted circle on screenshot headers
 }
 
 export type MarkKind = "kahf" | "mulk";

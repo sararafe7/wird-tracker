@@ -585,6 +585,7 @@ export default function GroupBoard({
             target="group"
             id={group.id}
             version={group.icon}
+            plain={group.iconPlain}
             label={t["image.group_label"]}
             apply={apply}
           />

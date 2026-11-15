@@ -570,6 +570,7 @@ function InitiativeSection({
                 target="initiative"
                 id={initiative.id}
                 version={initiative.logo}
+                plain={initiative.logoPlain}
                 label={t["image.initiative_label"]}
                 apply={apply}
               />

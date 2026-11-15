@@ -52,7 +52,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
       <div className="mx-auto w-full max-w-md flex-1 px-3 pt-4 pb-2">
         <div className="overflow-hidden rounded-[24px] bg-white shadow-[0_8px_24px_rgba(30,20,40,.12)]">
           <header className="flex items-center gap-3 bg-[var(--deep)] px-[14px] py-4 text-white">
-            <Badge target="group" id={group.id} version={group.icon} />
+            <Badge target="group" id={group.id} version={group.icon} plain={group.iconPlain} />
             <div className="min-w-0 flex-1 text-center">
               {/* No group name: members know their group, and its icon identifies it */}
               <h1 className="flex items-center justify-center gap-1.5 text-[22px] leading-tight font-bold">
@@ -68,6 +68,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
               target="initiative"
               id={initiative?.id ?? ""}
               version={initiative?.logo ?? null}
+              plain={initiative?.logoPlain}
             />
           </header>
           {stars.length === 0 ? (

@@ -97,6 +97,7 @@ export function ImagePicker({
   target,
   id,
   version,
+  plain,
   label,
   apply,
 }: {
@@ -104,17 +105,21 @@ export function ImagePicker({
   target: ImageTarget;
   id: string;
   version: string | null;
+  plain: boolean;
   label: string;
   apply: (op: Op) => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // Before there is an image, the choice waits here and goes with the upload
+  const [plainChoice, setPlainChoice] = useState(plain);
+  const plainNow = version ? plain : plainChoice;
 
   async function pick(file: File | undefined) {
     if (!file) return;
     setBusy(true);
     try {
-      apply({ type: "imageSet", target, id, image: await shrinkImage(file) });
+      apply({ type: "imageSet", target, id, image: await shrinkImage(file), plain: plainNow });
     } catch (error) {
       reportError("image", error);
     } finally {
@@ -164,6 +169,18 @@ export function ImagePicker({
           )}
         </div>
         <p className="text-xs text-stone-500">{t["image.hint"]}</p>
+        <label className="flex items-center gap-2 text-xs text-stone-600">
+          <input
+            type="checkbox"
+            checked={plainNow}
+            onChange={(e) => {
+              setPlainChoice(e.target.checked);
+              if (version) apply({ type: "imagePlain", target, id, plain: e.target.checked });
+            }}
+            className="h-4 w-4 accent-[var(--color-hasanat)]"
+          />
+          {t["image.plain"]}
+        </label>
       </div>
     </div>
   );

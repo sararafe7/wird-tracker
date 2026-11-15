@@ -82,18 +82,30 @@ export function Crescent({ label, legend }: { label: string; legend?: boolean })
 
 /**
  * Group icon or initiative logo in a circle of the day's tint with a thin white ring (transparent images
- * show the tint through); an empty space of the same size keeps the title centred
+ * show the tint through), or straight on the header when the image asks for no circle.
+ * An empty space of the same size keeps the title centred.
  */
 export function Badge({
   target,
   id,
   version,
+  plain = false,
 }: {
   target: ImageTarget;
   id: string;
   version: string | null;
+  plain?: boolean; // the image straight on the header, same size, nothing cropped (light logos)
 }) {
   if (!version) return <span className="h-[66px] w-[66px] shrink-0" aria-hidden="true" />;
+  if (plain) {
+    return (
+      <img
+        src={imageUrl(target, id, version)}
+        alt=""
+        className="h-[66px] w-[66px] shrink-0 object-contain"
+      />
+    );
+  }
   return (
     <span className="h-[66px] w-[66px] shrink-0 overflow-hidden rounded-full bg-[var(--tint)] ring-1 ring-white/60">
       <img src={imageUrl(target, id, version)} alt="" className="h-full w-full object-cover" />
