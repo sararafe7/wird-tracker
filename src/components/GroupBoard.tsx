@@ -33,6 +33,7 @@ import {
   clampDaily,
   clampPage,
   dateValue,
+  dayName,
   dayView,
   hijriDate,
   khatmat,
@@ -169,11 +170,10 @@ export default function GroupBoard({
   }
 
   const lang = typeof document === "undefined" ? "ar" : document.documentElement.lang;
-  const dateLabel = dateValue(date).toLocaleDateString(lang, {
-    weekday: "long",
+  const dateLabel = `${dayName(date)}، ${dateValue(date).toLocaleDateString(lang, {
     day: "numeric",
     month: "long",
-  });
+  })}`;
   const hijri = hijriDate(date, false);
   const isFriday = dateValue(date).getDay() === 5;
   const monthStart = `${date.slice(0, 7)}-01`;

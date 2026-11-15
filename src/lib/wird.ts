@@ -141,6 +141,13 @@ export function addDays(date: string, days: number): string {
   return localDate(d);
 }
 
+/** Day names in the app's spelling (with shadda), Sunday first; date formatting would drop it */
+const DAY_NAMES = ["الأحد", "الإثنين", "الثّلاثاء", "الأربعاء", "الخميس", "الجمعة", "السّبت"];
+
+export function dayName(date: string): string {
+  return DAY_NAMES[dateValue(date).getDay()];
+}
+
 /** Midday on a YYYY-MM-DD date, safe for formatting in any time zone offset */
 export function dateValue(date: string): Date {
   return new Date(`${date}T12:00:00`);
@@ -228,6 +235,14 @@ export function weekStars(
 const HIJRI_LOCALE = "ar-u-ca-islamic-umalqura-nu-latn";
 const HIJRI_ERA = "هـ";
 
+/** Hijri month names as browsers spell them, with the shadda the app's spelling uses */
+const HIJRI_MONTH_SPELLING: Record<string, string> = {
+  محرم: "محرّم",
+  "ربيع الأول": "ربيع الأوّل",
+  شوال: "شوّال",
+  "ذو الحجة": "ذو الحجّة",
+};
+
 /** Umm al-Qura Hijri day, month name and year, or null where the browser lacks that calendar */
 function hijriParts(date: string): { day: string; month: string; year: string } | null {
   try {
@@ -240,7 +255,8 @@ function hijriParts(date: string): { day: string; month: string; year: string } 
     if (format.resolvedOptions().calendar !== "islamic-umalqura") return null;
     const parts = format.formatToParts(dateValue(date));
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-    return { day: get("day"), month: get("month"), year: get("year") };
+    const month = get("month");
+    return { day: get("day"), month: HIJRI_MONTH_SPELLING[month] ?? month, year: get("year") };
   } catch {
     return null;
   }

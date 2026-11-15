@@ -13,7 +13,7 @@ import {
 import { dayTheme, SHARE_THEMES } from "@/components/theme";
 import type { Strings } from "@/components/ui";
 import { type Data, type Group, groupMembers, hasMark } from "@/lib/store";
-import { addDays, dateValue, dayView, fridayOnOrBefore, hijriDate } from "@/lib/wird";
+import { addDays, dateValue, dayName, dayView, fridayOnOrBefore, hijriDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
 interface Props {
@@ -38,9 +38,7 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
   const initiative = data.initiatives.find((i) => i.id === group.initiativeId);
   const friday = fridayOnOrBefore(ended);
   const members = groupMembers(data, group.id);
-  const lang = typeof document === "undefined" ? "ar" : document.documentElement.lang;
   const d = dateValue(date);
-  const dayName = d.toLocaleDateString(lang, { weekday: "long" });
   const numeric = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
   const hijri = hijriDate(date);
   // Shrink rows for big groups so the whole table still fits on one screen; header and footer keep their size
@@ -65,7 +63,7 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
             <div className="min-w-0 flex-1 text-center">
               <h1 className="truncate text-[22px] leading-tight font-bold">{group.name}</h1>
               <p className="text-[14px] font-medium text-white/88">
-                {t["table.title"].replace("{day}", dayName).replace("{date}", numeric)}
+                {t["table.title"].replace("{day}", dayName(date)).replace("{date}", numeric)}
               </p>
               {hijri && <p className="text-[12px] text-white/78">{hijri}</p>}
             </div>

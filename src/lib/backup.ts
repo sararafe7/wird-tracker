@@ -103,8 +103,9 @@ export function downloadBackup(
   const url = URL.createObjectURL(backupFile(t, data, groups, today));
   const a = document.createElement("a");
   a.href = url;
-  // Keep letters (Arabic included), digits and dashes, so the name is safe on every phone
-  a.download = `${t["backup.file_prefix"]}-${title.replace(/[^\p{L}\p{N}]+/gu, "-")}-${today}.xlsx`;
+  // No marks (shadda, kasra…) and only letters, digits and dashes, so the name is safe and easy to search
+  const name = title.replace(/\p{M}/gu, "").replace(/[^\p{L}\p{N}]+/gu, "-");
+  a.download = `${t["backup.file_prefix"]}-${name}-${today}.xlsx`;
   document.body.append(a);
   a.click();
   a.remove();
