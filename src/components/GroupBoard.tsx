@@ -301,7 +301,12 @@ export default function GroupBoard({
           t={t}
           id={`group-${group.id}`}
           empty={members.length === 0}
-          steps={[t["guide.manager_step1"], t["guide.manager_step2"], t["guide.manager_step3"]]}
+          steps={[
+            t["guide.manager_step1"],
+            t["guide.manager_step2"],
+            t["guide.manager_step3"],
+            t["guide.manager_step4"],
+          ]}
         />
       )}
 

@@ -138,9 +138,9 @@ export interface GroupHealth {
 const dayNumber = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
 
 /**
- * How a group is doing, for its supervisor: green when today's table was sent and at least
- * two-thirds of its members read in the last 7 days; red when no table was sent for 3 days or more
- * (or ever); yellow in between.
+ * How a group is doing, for its supervisor. The colour is about sending the table only: green when
+ * today's table was sent, yellow when not yet today (sent 1–2 days ago), red when no table was sent
+ * for 3 days or more, or ever. Member activity is reported separately.
  */
 export function groupHealth(data: Data, group: Group, today: string): GroupHealth {
   const members = groupMembers(data, group.id);
@@ -153,11 +153,7 @@ export function groupHealth(data: Data, group: Group, today: string): GroupHealt
   const last = lastSent(data, group.id, today);
   const sentDaysAgo = last === null ? null : dayNumber(today) - dayNumber(last);
   const status: GroupStatus =
-    sentDaysAgo === null || sentDaysAgo >= 3
-      ? "red"
-      : sentDaysAgo === 0 && members.length > 0 && active * 3 >= members.length * 2
-        ? "green"
-        : "yellow";
+    sentDaysAgo === null || sentDaysAgo >= 3 ? "red" : sentDaysAgo === 0 ? "green" : "yellow";
   return { members: members.length, active, sentDaysAgo, status };
 }
 

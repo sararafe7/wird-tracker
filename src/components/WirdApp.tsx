@@ -604,16 +604,14 @@ const STATUS_BAR: Record<GroupStatus, string> = {
   red: "bg-red-500",
 };
 
-/** Why a card is yellow or red, in one short line; nothing for green */
+/** Why a card is yellow or red (it is always about sending the table); nothing for green */
 function statusReason(t: Strings, h: GroupHealth): string | null {
   if (h.status === "green") return null;
   if (h.sentDaysAgo === null) return t["reason.never"];
   if (h.sentDaysAgo >= 3) {
     return fill(t[h.sentDaysAgo <= 10 ? "reason.days" : "reason.days_many"], { n: h.sentDaysAgo });
   }
-  if (h.sentDaysAgo > 0) return t["reason.not_today"];
-  if (h.members === 0) return t["board.empty_readonly"];
-  return fill(t["reason.few_read"], { n: h.active, total: h.members });
+  return t["reason.not_today"];
 }
 
 /** What the card colours mean, under the cards */
@@ -672,9 +670,19 @@ function GroupCard({
           <p className="truncate text-xs text-stone-500">
             {personName(data, group.managerId) ?? t["groups.no_manager"]}
           </p>
-          <p className="flex flex-wrap gap-x-3 text-sm text-slate-700">
-            <span>{fill(t["card.members"], { n: h.members })}</span>
+          <p className="text-sm text-slate-700">{fill(t["card.members"], { n: h.members })}</p>
+          {/* Member activity, apart from the colour: a neutral bar filled by the share who read */}
+          <p className="flex items-center gap-2 text-sm text-slate-700">
             <span>{fill(ta["card.active"], { n: h.active, total: h.members })}</span>
+            <span
+              className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-slate-200"
+              aria-hidden="true"
+            >
+              <span
+                className="block h-full rounded-full bg-slate-500"
+                style={{ width: `${h.members ? Math.round((h.active / h.members) * 100) : 0}%` }}
+              />
+            </span>
           </p>
           {/* A red card's reason already says how long no table was sent */}
           {h.status !== "red" && (
