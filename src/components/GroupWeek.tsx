@@ -1,6 +1,15 @@
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useState } from "react";
-import { SHARE_THEMES } from "@/components/theme";
+import {
+  Badge,
+  initiativeLabel,
+  Sparkle,
+  Star,
+  shareNavButton,
+  shareStyle,
+  useShareFont,
+} from "@/components/share";
+import { dayTheme, SHARE_THEMES } from "@/components/theme";
 import { fill, type Strings } from "@/components/ui";
 import { type Data, type Group, groupMembers } from "@/lib/store";
 import { addDays, dateValue, hijriRange, weekStars, weekStart } from "@/lib/wird";
@@ -15,12 +24,15 @@ interface Props {
 }
 
 /**
- * Screenshot-ready "star of the week" card. Opens on the week holding yesterday,
- * so on Sunday it shows the week that just ended.
+ * Screenshot-ready "star of the week" card, in the same design as the daily table and in the
+ * colours of the day it is shown. Opens on the week holding yesterday, so on Sunday it shows
+ * the week that just ended.
  */
 export default function GroupWeek({ t, data, group, today, onClose }: Props) {
+  useShareFont();
   const [start, setStart] = useState(() => weekStart(addDays(today, -1)));
-  const theme = SHARE_THEMES[group.audience];
+  const day = dayTheme(SHARE_THEMES[group.audience], today);
+  const initiative = data.initiatives.find((i) => i.id === group.initiativeId);
   const end = addDays(start, 6);
   const hijri = hijriRange(start, end);
   const { stars, perfect } = weekStars(groupMembers(data, group.id), data.records, start);
@@ -28,81 +40,98 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
     const d = dateValue(date);
     return `${d.getDate()}/${d.getMonth() + 1}`;
   };
-  const navButton = cn("rounded-full border bg-white", theme.button);
 
   return (
-    <div className={cn("fixed inset-0 z-[60] flex flex-col overflow-y-auto", theme.page)}>
+    <div
+      className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-[var(--page)]"
+      style={shareStyle(day)}
+    >
       <div className="mx-auto w-full max-w-md flex-1 px-3 pt-4 pb-2">
-        <div className={cn("overflow-hidden rounded-2xl border bg-white shadow-sm", theme.frame)}>
-          <header className={cn("px-3 py-4 text-center", theme.header)}>
-            <h1 className={cn("text-2xl font-bold", theme.headerText)}>
-              <span aria-hidden="true">{theme.weekEmoji}</span> {t["week.title"]}{" "}
-              <span aria-hidden="true">{theme.weekEmoji}</span>
-            </h1>
-            <p className={cn("mt-1 text-sm", theme.accent)}>
-              {fill(t["week.range"], {
-                from: short(start),
-                to: `${short(end)}/${dateValue(end).getFullYear()}`,
-              })}
-            </p>
-            {hijri && <p className={cn("text-sm", theme.accent)}>{hijri}</p>}
+        <div className="overflow-hidden rounded-[24px] bg-white shadow-[0_8px_24px_rgba(30,20,40,.12)]">
+          <header className="flex items-center gap-3 bg-[var(--deep)] px-[14px] py-4 text-white">
+            <Badge target="group" id={group.id} version={group.icon} />
+            <div className="min-w-0 flex-1 text-center">
+              <p className="truncate text-[22px] leading-tight font-bold">{group.name}</p>
+              <h1 className="mt-0.5 flex items-center justify-center gap-1.5 text-[17px] font-semibold">
+                <Sparkle />
+                {t["week.title"]}
+                <Sparkle className="h-5 w-5 -scale-x-100" />
+              </h1>
+              <p className="text-[14px] font-medium text-white/88">
+                {fill(t["week.range"], {
+                  from: short(start),
+                  to: `${short(end)}/${dateValue(end).getFullYear()}`,
+                })}
+              </p>
+              {hijri && <p className="text-[12px] text-white/78">{hijri}</p>}
+            </div>
+            <Badge
+              target="initiative"
+              id={initiative?.id ?? ""}
+              version={initiative?.logo ?? null}
+            />
           </header>
           {stars.length === 0 ? (
             <p className="px-4 py-8 text-center text-stone-600">{t["week.empty"]}</p>
           ) : (
             <>
-              <p className={cn("px-4 pt-4 text-center text-sm font-medium", theme.accent)}>
+              <p className="bg-[var(--tint)] py-2 text-center text-[12px] font-semibold text-[var(--deep)]">
                 {perfect ? t["week.perfect"] : t["week.top"]}
               </p>
-              <ol className="space-y-2 p-4">
-                {stars.map((s) => (
-                  <li
-                    key={s.member.id}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl border px-3 py-2",
-                      s.days === 7 ? theme.highlight : theme.rule,
-                    )}
-                  >
-                    <span className={cn("w-6 shrink-0 text-center font-semibold", theme.accent)}>
-                      {s.number}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-lg font-semibold text-slate-900">
-                      {s.member.name}
-                    </span>
-                    <span
-                      className={cn(
-                        "shrink-0 rounded-full px-2.5 py-0.5 text-sm font-semibold tabular-nums",
-                        theme.chip,
-                      )}
-                    >
-                      <bdi dir="ltr">{s.days}/7</bdi>
-                    </span>
-                  </li>
-                ))}
-              </ol>
+              <table className="w-full table-fixed text-center">
+                <colgroup>
+                  <col className="w-[30px]" />
+                  <col />
+                  <col className="w-[96px]" />
+                </colgroup>
+                <tbody className="text-[15px]">
+                  {stars.map((s) => (
+                    <tr key={s.member.id} className="h-[46px] border-b border-[var(--line)]">
+                      <td className="text-[13px] font-semibold text-[var(--deep)]">{s.number}</td>
+                      <td className="truncate px-1 font-medium text-slate-900">{s.member.name}</td>
+                      <td>
+                        {s.days === 7 ? (
+                          // A full week: a golden pill with a star, as a small celebration
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF0CC] py-0.5 ps-1 pe-2.5 text-[14px] font-semibold text-[#7A5A0E] ring-1 ring-[#F2B533]/60 tabular-nums">
+                            <Star className="h-5 w-5" />
+                            <bdi dir="ltr">7/7</bdi>
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-[var(--tint)] px-2.5 py-1 text-[14px] font-medium text-[#2A1A22] tabular-nums">
+                            <bdi dir="ltr">{s.days}/7</bdi>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </>
           )}
+          <footer className="px-[14px] py-3 text-[11px]">
+            <span className="block truncate font-semibold text-[var(--deep)]">
+              {initiativeLabel(t, initiative)}
+            </span>
+          </footer>
         </div>
       </div>
 
-      <nav
-        className={cn(
-          "sticky bottom-0 flex items-center justify-center gap-2 px-3 py-3",
-          theme.navBg,
-        )}
-      >
+      <nav className="sticky bottom-0 flex items-center justify-center gap-2 bg-[var(--page)]/95 px-3 py-3">
         <button
           type="button"
           onClick={() => setStart(addDays(start, -7))}
           aria-label={t["week.prev"]}
-          className={cn(navButton, "p-2")}
+          className={cn(shareNavButton, "p-2")}
         >
           <ChevronRight className="h-5 w-5 ltr:rotate-180" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={onClose}
-          className={cn(navButton, "inline-flex items-center gap-1 px-4 py-2 text-sm font-medium")}
+          className={cn(
+            shareNavButton,
+            "inline-flex items-center gap-1 px-4 py-2 text-sm font-medium",
+          )}
         >
           <X className="h-4 w-4" aria-hidden="true" />
           {t["table.close"]}
@@ -111,7 +140,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
           type="button"
           onClick={() => setStart(addDays(start, 7))}
           aria-label={t["week.next"]}
-          className={cn(navButton, "p-2")}
+          className={cn(shareNavButton, "p-2")}
         >
           <ChevronLeft className="h-5 w-5 ltr:rotate-180" aria-hidden="true" />
         </button>

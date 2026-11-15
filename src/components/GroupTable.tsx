@@ -1,15 +1,18 @@
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { type CSSProperties, useEffect, useState } from "react";
-import { dayTheme, SHARE_THEMES } from "@/components/theme";
-import { fill, type Strings } from "@/components/ui";
+import { useState } from "react";
 import {
-  type Data,
-  type Group,
-  groupMembers,
-  hasMark,
-  type ImageTarget,
-  imageUrl,
-} from "@/lib/store";
+  Badge,
+  Crescent,
+  Heart,
+  initiativeLabel,
+  Sun,
+  shareNavButton,
+  shareStyle,
+  useShareFont,
+} from "@/components/share";
+import { dayTheme, SHARE_THEMES } from "@/components/theme";
+import type { Strings } from "@/components/ui";
+import { type Data, type Group, groupMembers, hasMark } from "@/lib/store";
 import { addDays, dateValue, dayView, fridayOnOrBefore, hijriDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
@@ -21,98 +24,6 @@ interface Props {
   onClose: () => void;
 }
 
-const FONT_ID = "font-el-messiri";
-const FONT_URL =
-  "https://fonts.googleapis.com/css2?family=El+Messiri:wght@400;500;600;700&display=swap";
-
-/** El Messiri is only used here, so it loads when the table first opens */
-function useTableFont() {
-  useEffect(() => {
-    if (document.getElementById(FONT_ID)) return;
-    const link = document.createElement("link");
-    link.id = FONT_ID;
-    link.rel = "stylesheet";
-    link.href = FONT_URL;
-    document.head.append(link);
-  }, []);
-}
-
-/** The shared "read yesterday" heart, in the day's colour; the outline keeps the white heart visible */
-function Heart({ color, label }: { color: string; label: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px] shrink-0" role="img" aria-label={label}>
-      <path
-        d="M12 21s-7.5-4.6-9.6-9.2C1 8.4 3.2 5 6.7 5c2.1 0 3.6 1.1 5.3 3 1.7-1.9 3.2-3 5.3-3 3.5 0 5.7 3.4 4.3 6.8C19.5 16.4 12 21 12 21z"
-        fill={color}
-        stroke="rgba(0,0,0,0.18)"
-        strokeWidth="0.8"
-      />
-    </svg>
-  );
-}
-
-/** Kahf: «نور», a golden sun, for the light between the two Fridays */
-function Sun({ label, legend }: { label: string; legend?: boolean }) {
-  if (legend) {
-    return (
-      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
-        <circle cx="12" cy="12" r="4.5" fill="#F2B533" />
-        <g stroke="#E3A21A" strokeWidth="2" strokeLinecap="round">
-          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-        </g>
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" className="mx-auto h-6 w-6" role="img" aria-label={label}>
-      <circle cx="12" cy="12" r="11" fill="#FDF0CC" />
-      <g stroke="#E3A21A" strokeWidth="1.6" strokeLinecap="round">
-        <path d="M12 3.5v2.6M12 17.9v2.6M3.5 12h2.6M17.9 12h2.6M6 6l1.8 1.8M16.2 16.2L18 18M18 6l-1.8 1.8M7.8 16.2L6 18" />
-      </g>
-      <circle cx="12" cy="12" r="3.6" fill="#F2B533" />
-    </svg>
-  );
-}
-
-/** Mulk: a crescent with a small star, for the night reading */
-function Crescent({ label, legend }: { label: string; legend?: boolean }) {
-  if (legend) {
-    return (
-      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
-        <path d="M14.6 3.2a9 9 0 1 0 6.2 15.6 7.2 7.2 0 0 1-6.2-15.6z" fill="#5B4FB5" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 24 24" className="mx-auto h-6 w-6" role="img" aria-label={label}>
-      <circle cx="12" cy="12" r="11" fill="#EAE8F7" />
-      <path d="M14.6 5.2a7 7 0 1 0 4.4 12.2 5.6 5.6 0 0 1-4.4-12.2z" fill="#5B4FB5" />
-      <path d="M17.6 6.4l.6 1.3 1.3.6-1.3.6-.6 1.3-.6-1.3-1.3-.6 1.3-.6z" fill="#E3A21A" />
-    </svg>
-  );
-}
-
-/**
- * Group icon or initiative logo in a circle of the day's tint with a thin white ring (transparent images
- * show the tint through); an empty space of the same size keeps the title centred
- */
-function Badge({
-  target,
-  id,
-  version,
-}: {
-  target: ImageTarget;
-  id: string;
-  version: string | null;
-}) {
-  if (!version) return <span className="h-[66px] w-[66px] shrink-0" aria-hidden="true" />;
-  return (
-    <span className="h-[66px] w-[66px] shrink-0 overflow-hidden rounded-full bg-[var(--tint)] ring-1 ring-white/60">
-      <img src={imageUrl(target, id, version)} alt="" className="h-full w-full object-cover" />
-    </span>
-  );
-}
-
 /**
  * Screenshot-ready table of the next day's wird, sized to fit one phone screen.
  * Pages are for the table's date; the heart and Mulk report the day that just ended.
@@ -120,7 +31,7 @@ function Badge({
  * The whole table takes its colours from the day's heart.
  */
 export default function GroupTable({ t, data, group, today, onClose }: Props) {
-  useTableFont();
+  useShareFont();
   const [date, setDate] = useState(() => addDays(today, 1));
   const ended = addDays(date, -1);
   const day = dayTheme(SHARE_THEMES[group.audience], ended);
@@ -134,22 +45,13 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
   const hijri = hijriDate(date);
   // Shrink rows for big groups so the whole table still fits on one screen; header and footer keep their size
   const dense = members.length > 18;
-  const colours = {
-    "--deep": day.deep,
-    "--tint": day.tint,
-    "--page": day.page,
-    "--line": day.line,
-    fontFamily: "'El Messiri', sans-serif",
-  } as CSSProperties;
+  const colours = shareStyle(day);
   // Kahf read any day from the most recent Friday up to the day that just ended
   const kahfDone = (memberId: string) =>
     data.marks.some(
       (k) => k.memberId === memberId && k.kind === "kahf" && k.date >= friday && k.date <= ended,
     );
-  const initiativeName = initiative?.name.startsWith("مبادرة")
-    ? initiative.name
-    : fill(t["table.initiative"], { name: initiative?.name ?? "" });
-  const navButton = "rounded-full border border-[var(--line)] bg-white text-[var(--deep)]";
+  const navButton = shareNavButton;
 
   return (
     <div
@@ -239,7 +141,7 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
           </table>
           <footer className="flex items-center justify-between gap-2 px-[14px] py-3 text-[11px]">
             <span className="truncate font-semibold text-[var(--deep)]">
-              {initiative ? initiativeName : ""}
+              {initiativeLabel(t, initiative)}
             </span>
             <span className="flex shrink-0 items-center gap-3 text-slate-600">
               <span className="flex items-center gap-1">
