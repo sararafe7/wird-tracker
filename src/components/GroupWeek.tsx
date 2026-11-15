@@ -1,14 +1,6 @@
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useState } from "react";
-import {
-  Badge,
-  initiativeLabel,
-  Sparkle,
-  Star,
-  shareNavButton,
-  shareStyle,
-  useShareFont,
-} from "@/components/share";
+import { Badge, Sparkle, Star, shareNavButton, shareStyle, useShareFont } from "@/components/share";
 import { dayTheme, SHARE_THEMES } from "@/components/theme";
 import type { Strings } from "@/components/ui";
 import { type Data, type Group, groupMembers } from "@/lib/store";
@@ -118,7 +110,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
           )}
           <footer className="flex items-center justify-between gap-2 px-[14px] py-3 text-[11px]">
             <span className="truncate font-semibold text-[var(--deep)]">
-              {initiativeLabel(t, initiative)}
+              {initiative?.name ?? ""}
             </span>
             {hijri && <span className="shrink-0 text-slate-500">{hijri}</span>}
           </footer>

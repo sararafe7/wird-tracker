@@ -1,8 +1,7 @@
 import type { CSSProperties } from "react";
 import { useEffect } from "react";
 import type { DayTheme } from "@/components/theme";
-import { fill, type Strings } from "@/components/ui";
-import { type ImageTarget, type Initiative, imageUrl } from "@/lib/store";
+import { type ImageTarget, imageUrl } from "@/lib/store";
 
 /**
  * Pieces shared by the screenshot views (the daily table and the weekly card), so both follow
@@ -122,14 +121,6 @@ export function shareStyle(day: DayTheme): CSSProperties {
     "--line": day.line,
     fontFamily: "'El Messiri', sans-serif",
   } as CSSProperties;
-}
-
-/** «مبادرة <name>», unless the name already starts with «مبادرة» */
-export function initiativeLabel(t: Strings, initiative: Initiative | undefined): string {
-  if (!initiative) return "";
-  return initiative.name.startsWith("مبادرة")
-    ? initiative.name
-    : fill(t["table.initiative"], { name: initiative.name });
 }
 
 export const shareNavButton =
