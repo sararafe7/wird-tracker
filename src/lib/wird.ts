@@ -146,6 +146,36 @@ export function dateValue(date: string): Date {
   return new Date(`${date}T12:00:00`);
 }
 
+/** The Friday on or before this date (Friday itself stays) */
+export function fridayOnOrBefore(date: string): string {
+  return addDays(date, -((dateValue(date).getDay() + 2) % 7));
+}
+
+export interface MonthStats {
+  month: string; // YYYY-MM
+  days: number; // days with a record, including 0
+  pages: number;
+  khatmat: number; // khatmas completed during the month
+}
+
+/** Her readings month by month, newest first */
+export function monthHistory(member: Member, records: WirdRecord[]): MonthStats[] {
+  const mine = memberRecords(records, member.id).sort((a, b) => a.date.localeCompare(b.date));
+  const months = new Map<string, MonthStats>();
+  let offset = member.startPage - 1;
+  for (const r of mine) {
+    const key = r.date.slice(0, 7);
+    const m = months.get(key) ?? { month: key, days: 0, pages: 0, khatmat: 0 };
+    const before = Math.floor(offset / TOTAL_PAGES);
+    offset = tidy(offset + recordPages(r));
+    m.days += 1;
+    m.pages = tidy(m.pages + recordPages(r));
+    m.khatmat += Math.floor(offset / TOTAL_PAGES) - before;
+    months.set(key, m);
+  }
+  return [...months.values()].reverse();
+}
+
 /** Sunday that starts the week (Sunday to Saturday) holding this date */
 export function weekStart(date: string): string {
   return addDays(date, -dateValue(date).getDay());

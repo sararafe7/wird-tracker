@@ -4,6 +4,8 @@ import {
   Check,
   ChevronRight,
   ClipboardCopy,
+  Download,
+  History,
   ListOrdered,
   Pencil,
   Plus,
@@ -12,8 +14,11 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { ImagePicker, Thumb } from "@/components/images";
+import MemberHistory from "@/components/MemberHistory";
 import { SHARE_THEMES } from "@/components/theme";
 import { copyText, fill, inputClass, SpanText, type Strings } from "@/components/ui";
+import { downloadBackup } from "@/lib/backup";
 import { newId } from "@/lib/id";
 import type { Op } from "@/lib/ops";
 import {
@@ -73,6 +78,7 @@ export default function GroupBoard({
 }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
   const [picker, setPicker] = useState<string | null>(null);
+  const [history, setHistory] = useState<Member | null>(null);
   const [custom, setCustom] = useState("");
   const [date, setDate] = useState(today);
   const [reorder, setReorder] = useState(false);
@@ -188,7 +194,10 @@ export default function GroupBoard({
       <header className="space-y-2">
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold text-slate-900">{group.name}</h1>
+            <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
+              <Thumb target="group" id={group.id} version={group.icon} className="h-9 w-9" />
+              <span className="truncate">{group.name}</span>
+            </h1>
             <p className="text-sm text-stone-500">
               {date === today ? t["wird.title"] : t["wird.title_past"]} · {dateLabel}
               {hijri && ` · ${hijri}`}
@@ -381,6 +390,15 @@ export default function GroupBoard({
                     >
                       <bdi dir="ltr">×{done ? v.record?.value : ""}</bdi>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setHistory(m)}
+                      aria-label={fill(t["history.open"], { name: m.name })}
+                      className="flex flex-col items-center rounded-lg px-1.5 py-1 text-[11px] text-stone-500 hover:bg-slate-50 hover:text-slate-700"
+                    >
+                      <History className="h-4 w-4" aria-hidden="true" />
+                      {t["history.button"]}
+                    </button>
                     {canManage && (
                       <button
                         type="button"
@@ -558,6 +576,37 @@ export default function GroupBoard({
             )}
           </div>
         </form>
+      )}
+
+      {canManage && !form && !reorder && (
+        <section className="card space-y-4 !p-4">
+          <ImagePicker
+            t={t}
+            target="group"
+            id={group.id}
+            version={group.icon}
+            label={t["image.group_label"]}
+            apply={apply}
+          />
+          <button
+            type="button"
+            className="btn-secondary w-full !py-2 text-sm"
+            onClick={() => downloadBackup(t, data, [group], group.name, today)}
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            {t["backup.group_button"]}
+          </button>
+        </section>
+      )}
+
+      {history && (
+        <MemberHistory
+          t={t}
+          member={history}
+          records={records}
+          today={today}
+          onClose={() => setHistory(null)}
+        />
       )}
     </div>
   );

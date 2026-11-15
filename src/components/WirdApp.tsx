@@ -1,5 +1,7 @@
 import {
   ChevronLeft,
+  Download,
+  HelpCircle,
   LogIn,
   LogOut,
   Pencil,
@@ -13,9 +15,11 @@ import { useCallback, useEffect, useState } from "react";
 import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
 import GroupWeek from "@/components/GroupWeek";
+import { ImagePicker, Thumb } from "@/components/images";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, fetchSummaries, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
+import { downloadBackup } from "@/lib/backup";
 import { ERROR_EVENT, type ErrorKind, reportError } from "@/lib/errors";
 import { newId } from "@/lib/id";
 import { applyOp, type Op, reloadsAfter } from "@/lib/ops";
@@ -335,8 +339,17 @@ function InitiativeSection({
         />
       ) : (
         <div className="flex items-center justify-between gap-2">
-          <h1 id={`initiative-${initiative.id}`} className="text-2xl font-bold text-slate-900">
-            {initiative.name}
+          <h1
+            id={`initiative-${initiative.id}`}
+            className="flex min-w-0 items-center gap-2 text-2xl font-bold text-slate-900"
+          >
+            <Thumb
+              target="initiative"
+              id={initiative.id}
+              version={initiative.logo}
+              className="h-9 w-9"
+            />
+            <span className="truncate">{initiative.name}</span>
           </h1>
           <span className="flex shrink-0 items-center gap-1 text-sm text-stone-500">
             {t[`role.${initiative.role}`]}
@@ -358,10 +371,12 @@ function InitiativeSection({
         <p className="card text-stone-600">{t["initiative.suspended"]}</p>
       ) : (
         <>
-          {groups.length === 0 && (
-            <p className="card text-stone-600">
-              {supervisor ? t["groups.empty_supervisor"] : t["groups.empty_manager"]}
-            </p>
+          {supervisor ? (
+            <StartGuide t={t} initiativeId={initiative.id} empty={groups.length === 0} />
+          ) : (
+            groups.length === 0 && (
+              <p className="card text-stone-600">{t["groups.empty_manager"]}</p>
+            )
           )}
           <ul className="space-y-2">
             {groups.map((g) => {
@@ -373,6 +388,7 @@ function InitiativeSection({
                   className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white"
                 >
                   <a href={`#/g/${g.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
+                    <Thumb target="group" id={g.id} version={g.icon} className="h-10 w-10" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold text-slate-900">{g.name}</p>
                       <p className="text-sm text-stone-500">
@@ -530,8 +546,110 @@ function InitiativeSection({
           {supervisor && (
             <SupervisorsSection t={t} data={data} apply={apply} initiative={initiative} />
           )}
+
+          {supervisor && (
+            <div className="card space-y-4 !p-4">
+              <ImagePicker
+                t={t}
+                target="initiative"
+                id={initiative.id}
+                version={initiative.logo}
+                label={t["image.initiative_label"]}
+                apply={apply}
+              />
+              <button
+                type="button"
+                className="btn-secondary w-full !py-2 text-sm"
+                onClick={() => downloadBackup(t, data, groups, initiative.name, today)}
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                {t["backup.initiative_button"]}
+              </button>
+            </div>
+          )}
         </>
       )}
+    </section>
+  );
+}
+
+/**
+ * First steps for a supervisor: open by itself while the initiative has no groups,
+ * and again from «كيف أبدأ؟». Closing it is remembered on this device.
+ */
+function StartGuide({
+  t,
+  initiativeId,
+  empty,
+}: {
+  t: Strings;
+  initiativeId: string;
+  empty: boolean;
+}) {
+  const key = `wird:guide-closed:${initiativeId}`;
+  const [closed, setClosed] = useState(() => {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [open, setOpen] = useState(false);
+
+  function close() {
+    setOpen(false);
+    setClosed(true);
+    try {
+      localStorage.setItem(key, "1");
+    } catch {
+      // Private browsing: it just opens again next time
+    }
+  }
+
+  if (!open && !(empty && !closed)) {
+    return (
+      <div className="space-y-2">
+        {empty && <p className="card text-stone-600">{t["groups.empty_supervisor"]}</p>}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1 text-sm text-hasanat hover:underline"
+        >
+          <HelpCircle className="h-4 w-4" aria-hidden="true" />
+          {t["guide.title"]}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className="card space-y-3 border-hasanat/30 bg-hasanat/5"
+      aria-labelledby={`guide-${initiativeId}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h2 id={`guide-${initiativeId}`} className="text-lg font-semibold text-slate-900">
+          {t["guide.title"]}
+        </h2>
+        <button
+          type="button"
+          onClick={close}
+          aria-label={t["guide.close"]}
+          className="rounded-lg p-1.5 text-stone-500 hover:bg-white hover:text-slate-700"
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      <ol className="space-y-3">
+        {["guide.step1", "guide.step2", "guide.step3"].map((key, i) => (
+          <li key={key} className="flex gap-3">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-hasanat text-sm font-semibold text-white">
+              {i + 1}
+            </span>
+            <span className="pt-0.5 text-sm text-slate-700">{t[key]}</span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -890,6 +1008,7 @@ function Screens({ t }: { t: Strings }) {
           if (status === 409) reportError("email_taken", error);
           else if (status === 403) reportError("forbidden", error);
           else if (status === 429) reportError("limit", error);
+          else if (status === 400 && op.type === "imageSet") reportError("image", error);
           else reportError("save", error);
           reload();
         });

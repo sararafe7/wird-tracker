@@ -32,6 +32,7 @@ export interface Initiative {
   role: Role;
   suspended: boolean; // closed by an app admin; nothing inside it is sent
   supervisorIds: string[]; // only filled in for initiatives she supervises
+  logo: string | null; // version of its logo, or null for none
 }
 
 /** What app admins see of every initiative: no member names or records */
@@ -56,6 +57,7 @@ export interface Group {
   name: string;
   managerId: string | null;
   audience: Audience;
+  icon: string | null; // version of its icon, or null for none
 }
 
 export type MarkKind = "kahf" | "mulk";
@@ -75,6 +77,13 @@ export interface Data {
   members: Member[]; // array order is the numbering order within each group
   records: WirdRecord[];
   marks: Mark[];
+}
+
+/** Logos and group icons are served separately, so the data stays small; the version makes each URL cacheable */
+export type ImageTarget = "initiative" | "group";
+
+export function imageUrl(target: ImageTarget, id: string, version: string): string {
+  return `/api/image/${target}/${encodeURIComponent(id)}?v=${version}`;
 }
 
 export function initiativeGroups(data: Data, initiativeId: string): Group[] {

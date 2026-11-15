@@ -6,6 +6,7 @@ export type ErrorKind =
   | "email_taken"
   | "forbidden"
   | "limit"
+  | "image"
   | "unexpected";
 
 export const ERROR_EVENT = "wird:error";

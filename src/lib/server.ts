@@ -1,7 +1,8 @@
-import type { Op } from "@/lib/ops";
+import { IMAGE_MAX_BYTES, type Op } from "@/lib/ops";
 import {
   type Data,
   type Group,
+  type ImageTarget,
   INITIATIVE_LIMIT,
   type Initiative,
   type InitiativeSummary,
@@ -185,7 +186,7 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
   const q = (sql: string) => db.prepare(`${VISIBLE} ${sql}`).bind(actor.staffId);
   const [initiatives, links, people, groups, members, records, marks, created] = await db.batch([
     q(
-      `SELECT i.id, i.name, i.status,
+      `SELECT i.id, i.name, i.status, i.logo_version,
          EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?1) AS sup
        FROM initiatives i
        WHERE EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?1)
@@ -203,7 +204,9 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
           OR id IN (SELECT manager_id FROM groups WHERE initiative_id IN (SELECT initiative_id FROM sup))
        ORDER BY created_at`,
     ),
-    q("SELECT id, initiative_id, name, manager_id, audience FROM vg ORDER BY created_at"),
+    q(
+      "SELECT id, initiative_id, name, manager_id, audience, icon_version FROM vg ORDER BY created_at",
+    ),
     q(
       `SELECT m.id, m.group_id, m.name, m.daily, m.start_page FROM members m
        JOIN vg ON vg.id = m.group_id ORDER BY m.group_id, m.position, m.created_at`,
@@ -235,6 +238,8 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         role: i.sup ? "supervisor" : "manager",
         suspended: i.status !== "active",
         supervisorIds: supervisorIds(String(i.id)),
+        // Suspended initiatives send nothing inside, their logo included
+        logo: i.logo_version && i.status === "active" ? String(i.logo_version) : null,
       }),
     ),
     people: rows(people).map(
@@ -252,6 +257,7 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         name: String(g.name),
         managerId: g.manager_id ? String(g.manager_id) : null,
         audience: g.audience === "boys" ? "boys" : "girls",
+        icon: g.icon_version ? String(g.icon_version) : null,
       }),
     ),
     members: rows(members).map(
@@ -309,6 +315,53 @@ export async function loadSummaries(db: D1Database, actor: Actor): Promise<Initi
     groups: Number(i.groups),
     members: Number(i.members),
   }));
+}
+
+/** The image's bytes, if the data URL holds a real WebP, JPEG or PNG within the size limit */
+function imageBytes(dataUrl: string): { mime: string; bytes: Uint8Array<ArrayBuffer> } | null {
+  const m = dataUrl.match(/^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/]+=*)$/);
+  if (!m) return null;
+  const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+  const starts = (...sig: number[]) => sig.every((b, i) => bytes[i] === b);
+  const real =
+    m[1] === "image/png"
+      ? starts(0x89, 0x50, 0x4e, 0x47)
+      : m[1] === "image/jpeg"
+        ? starts(0xff, 0xd8, 0xff)
+        : starts(0x52, 0x49, 0x46, 0x46) && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  return real && bytes.length <= IMAGE_MAX_BYTES ? { mime: m[1], bytes } : null;
+}
+
+function checkImage(dataUrl: string) {
+  if (!imageBytes(dataUrl)) throw new HttpError(400, "not a small image");
+}
+
+/**
+ * A logo or group icon, only for someone who may see it: a logo for the initiative's supervisors
+ * and managers, an icon for the group's manager and the initiative's supervisors. Never in a
+ * suspended initiative. Anything else looks the same as no image.
+ */
+export async function loadImage(
+  db: D1Database,
+  actor: Actor,
+  target: ImageTarget,
+  id: string,
+): Promise<{ mime: string; bytes: Uint8Array<ArrayBuffer> } | null> {
+  if (!actor.staffId) return null;
+  const row = await db
+    .prepare(
+      target === "initiative"
+        ? `SELECT i.logo AS image FROM initiatives i
+           WHERE i.id = ?1 AND i.status = 'active' AND (
+             EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?2)
+             OR EXISTS (SELECT 1 FROM groups g WHERE g.initiative_id = i.id AND g.manager_id = ?2))`
+        : `SELECT g.icon AS image FROM groups g JOIN initiatives i ON i.id = g.initiative_id
+           WHERE g.id = ?1 AND i.status = 'active' AND (g.manager_id = ?2 OR EXISTS (
+             SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = g.initiative_id AND s.staff_id = ?2))`,
+    )
+    .bind(id, actor.staffId)
+    .first<{ image: string | null }>();
+  return row?.image ? imageBytes(row.image) : null;
 }
 
 function requireAdmin(actor: Actor) {
@@ -486,6 +539,18 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
         .bind(op.name, op.id)
         .run();
       if (meta.changes === 0) throw new HttpError(404, "initiative not found");
+      return;
+    }
+    case "imageSet": {
+      if (op.target === "initiative") await requireSupervisorOf(db, actor, op.id);
+      else await requireGroup(db, actor, op.id);
+      if (op.image !== null) checkImage(op.image);
+      const sql =
+        op.target === "initiative"
+          ? "UPDATE initiatives SET logo = ?, logo_version = ? WHERE id = ?"
+          : "UPDATE groups SET icon = ?, icon_version = ? WHERE id = ?";
+      const version = op.image === null ? null : crypto.randomUUID().slice(0, 8);
+      await db.prepare(sql).bind(op.image, version, op.id).run();
       return;
     }
     case "supervisorAdd": {

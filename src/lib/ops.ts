@@ -13,6 +13,9 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const name = z.string().trim().min(1).max(80);
 const page = z.number().int().min(1).max(TOTAL_PAGES);
 const email = z.string().trim().toLowerCase().email().max(254);
+/** Images are resized to about 256px and under 50 KB on the phone; this leaves room for base64 */
+export const IMAGE_MAX_BYTES = 60 * 1024;
+const IMAGE_MAX_DATA_URL = Math.ceil(IMAGE_MAX_BYTES / 3) * 4 + 40;
 /** Someone named by the supervisor; the server finds her by email or adds her */
 const person = z.object({ name, email });
 
@@ -54,6 +57,18 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("initiativeCreate"), id, name }),
   // Its supervisors, or any app admin
   z.object({ type: z.literal("initiativeRename"), id, name }),
+  // A logo for an initiative (its supervisors) or an icon for a group (its manager or supervisors);
+  // null removes it. Resized on the phone; the server checks the bytes too.
+  z.object({
+    type: z.literal("imageSet"),
+    target: z.enum(["initiative", "group"]),
+    id,
+    image: z
+      .string()
+      .max(IMAGE_MAX_DATA_URL)
+      .regex(/^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/]+=*$/)
+      .nullable(),
+  }),
   z.object({ type: z.literal("supervisorAdd"), initiativeId: id, ...person.shape }),
   z.object({ type: z.literal("supervisorRemove"), initiativeId: id, personId: id }),
   // App admins only

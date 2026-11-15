@@ -1,12 +1,11 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useState } from "react";
-import { readEmoji, SHARE_THEMES } from "@/components/theme";
+import { Thumb } from "@/components/images";
+import { readHeart, SHARE_THEMES } from "@/components/theme";
 import type { Strings } from "@/components/ui";
-import { type Data, type Group, groupMembers, hasMark, type MarkKind } from "@/lib/store";
-import { addDays, dateValue, dayView, hijriDate } from "@/lib/wird";
+import { type Data, type Group, groupMembers, hasMark } from "@/lib/store";
+import { addDays, dateValue, dayView, fridayOnOrBefore, hijriDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
-
-const MARKS: MarkKind[] = ["kahf", "mulk"];
 
 interface Props {
   t: Strings;
@@ -16,14 +15,31 @@ interface Props {
   onClose: () => void;
 }
 
+/** Kahf / Mulk read: a ✓ in a filled circle in the table's colour */
+function Tick({ className, label }: { className: string; label: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      className={cn("inline-flex h-5 w-5 items-center justify-center rounded-full", className)}
+    >
+      <Check className="h-3.5 w-3.5" strokeWidth={3} aria-hidden="true" />
+    </span>
+  );
+}
+
 /**
  * Screenshot-ready table of the next day's wird, sized to fit one phone screen.
- * Pages are for the table's date; the emoji and marks report the day that just ended.
+ * Pages are for the table's date; the heart and Mulk report the day that just ended.
+ * Kahf reports the most recent Friday and stays all week, so a missed Kahf shows until the next Friday.
  */
 export default function GroupTable({ t, data, group, today, onClose }: Props) {
   const [date, setDate] = useState(() => addDays(today, 1));
   const theme = SHARE_THEMES[group.audience];
+  const initiative = data.initiatives.find((i) => i.id === group.initiativeId);
   const ended = addDays(date, -1);
+  const friday = fridayOnOrBefore(ended);
+  const heart = readHeart(theme, ended);
   const members = groupMembers(data, group.id);
   const lang = typeof document === "undefined" ? "ar" : document.documentElement.lang;
   const d = dateValue(date);
@@ -34,6 +50,11 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
   const dense = members.length > 18;
   const cell = dense ? "px-1 py-0.5" : "px-1.5 py-1.5";
   const navButton = cn("rounded-full border bg-white", theme.button);
+  // Kahf read any day from the most recent Friday up to the day that just ended
+  const kahfDone = (memberId: string) =>
+    data.marks.some(
+      (k) => k.memberId === memberId && k.kind === "kahf" && k.date >= friday && k.date <= ended,
+    );
 
   return (
     <div className={cn("fixed inset-0 z-[60] flex flex-col overflow-y-auto", theme.page)}>
@@ -41,16 +62,38 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
         <div className={cn("overflow-hidden rounded-2xl border bg-white shadow-sm", theme.frame)}>
           <header
             className={cn(
-              "px-3 text-center",
+              "relative px-12 text-center",
               theme.header,
               theme.headerText,
               dense ? "py-2" : "py-3",
             )}
           >
-            <h1 className={cn("font-bold", dense ? "text-lg" : "text-xl")}>
-              {t["table.title"].replace("{day}", dayName).replace("{date}", numeric)}
+            {initiative && (
+              <Thumb
+                target="initiative"
+                id={initiative.id}
+                version={initiative.logo}
+                className={cn("absolute start-2 top-2", dense ? "h-8 w-8" : "h-10 w-10")}
+              />
+            )}
+            <h1
+              className={cn(
+                "flex items-center justify-center gap-2 font-bold",
+                dense ? "text-lg" : "text-xl",
+              )}
+            >
+              <Thumb
+                target="group"
+                id={group.id}
+                version={group.icon}
+                className={dense ? "h-6 w-6" : "h-7 w-7"}
+              />
+              <span className="truncate">{group.name}</span>
             </h1>
-            {hijri && <p className={cn("font-medium", dense ? "text-xs" : "text-sm")}>{hijri}</p>}
+            <p className={cn("font-semibold", dense ? "text-sm" : "text-base")}>
+              {t["table.title"].replace("{day}", dayName).replace("{date}", numeric)}
+            </p>
+            {hijri && <p className={cn("opacity-80", dense ? "text-xs" : "text-sm")}>{hijri}</p>}
           </header>
           <table className={cn("w-full table-fixed text-center", dense ? "text-xs" : "text-sm")}>
             <colgroup>
@@ -58,17 +101,17 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
               <col />
               <col className="w-[13%]" />
               <col className="w-[13%]" />
-              <col className="w-[15%]" />
-              <col className="w-[15%]" />
+              <col className="w-[13%]" />
+              <col className="w-[13%]" />
             </colgroup>
             <thead>
               <tr className={cn("font-semibold", theme.subhead)}>
-                <th className={cn(cell, "border-b")}>{t["table.number"]}</th>
-                <th className={cn(cell, "border-b")}>{t["table.name"]}</th>
-                <th className={cn(cell, "border-b")}>{t["table.from"]}</th>
-                <th className={cn(cell, "border-b")}>{t["table.to"]}</th>
-                <th className={cn(cell, "border-b leading-tight")}>{t["table.kahf"]}</th>
-                <th className={cn(cell, "border-b leading-tight")}>{t["table.mulk"]}</th>
+                <th className={cn(cell, "border-b", theme.frame)}>{t["table.number"]}</th>
+                <th className={cn(cell, "border-b text-start", theme.frame)}>{t["table.name"]}</th>
+                <th className={cn(cell, "border-b", theme.frame)}>{t["table.from"]}</th>
+                <th className={cn(cell, "border-b", theme.frame)}>{t["table.to"]}</th>
+                <th className={cn(cell, "border-b", theme.frame)}>{t["table.kahf"]}</th>
+                <th className={cn(cell, "border-b", theme.frame)}>{t["table.mulk"]}</th>
               </tr>
             </thead>
             <tbody>
@@ -84,21 +127,34 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
                     <td className={cn(row, "text-start")}>
                       <span className="flex items-center gap-1">
                         <span className="truncate">{m.name}</span>
-                        {readEnded && <span className="shrink-0">{readEmoji(theme, m.id)}</span>}
+                        {readEnded && (
+                          // A faint outline keeps the white heart visible on white rows
+                          <span className="shrink-0 drop-shadow-[0_0_1px_rgb(0_0_0/0.35)]">
+                            {heart}
+                          </span>
+                        )}
                       </span>
                     </td>
                     <td className={cn(row, "tabular-nums")}>{from}</td>
                     <td className={cn(row, "tabular-nums")}>{to ?? "–"}</td>
-                    {MARKS.map((kind) => (
-                      <td key={kind} className={row}>
-                        {hasMark(data.marks, m.id, ended, kind) ? theme.mark : ""}
-                      </td>
-                    ))}
+                    <td className={row}>
+                      {kahfDone(m.id) && <Tick className={theme.check} label={t["marks.kahf"]} />}
+                    </td>
+                    <td className={row}>
+                      {hasMark(data.marks, m.id, ended, "mulk") && (
+                        <Tick className={theme.check} label={t["marks.mulk"]} />
+                      )}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          {initiative && (
+            <footer className={cn("px-3 py-2 text-center text-xs font-medium", theme.accent)}>
+              {initiative.name}
+            </footer>
+          )}
         </div>
       </div>
 

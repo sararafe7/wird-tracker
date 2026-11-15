@@ -17,10 +17,10 @@ export interface ShareTheme {
   button: string; // bottom navigation buttons
   chip: string; // day count badge
   highlight: string; // 7/7 rows
-  mark: string; // Kahf / Mulk read
+  check: string; // Kahf / Mulk read, in the table: a ✓ in a filled circle
   markOn: string; // Kahf / Mulk toggle when ticked, on the group page
   markHint: string; // Kahf toggle on Fridays before it is ticked
-  readEmoji: string[]; // one per member for "read yesterday"
+  hearts: string[]; // "read yesterday": everyone shares one heart, its colour set by the date
   weekEmoji: string;
 }
 
@@ -38,10 +38,10 @@ export const SHARE_THEMES: Record<Audience, ShareTheme> = {
     button: "border-pink-200 text-pink-800",
     chip: "bg-pink-100 text-pink-900",
     highlight: "border-pink-300 bg-pink-50",
-    mark: "🌸",
+    check: "bg-pink-500 text-white",
     markOn: "border-pink-300 bg-pink-100 text-pink-800",
     markHint: "border-pink-200 text-pink-700",
-    readEmoji: ["🌸", "🌷", "💝", "🌹", "✨", "💐"],
+    hearts: ["💙", "❤️", "🤍", "💚", "💛", "💜", "🧡", "🩷"],
     weekEmoji: "🌸",
   },
   boys: {
@@ -57,17 +57,16 @@ export const SHARE_THEMES: Record<Audience, ShareTheme> = {
     button: "border-sky-200 text-sky-800",
     chip: "bg-sky-100 text-sky-900",
     highlight: "border-sky-300 bg-sky-50",
-    mark: "🌿",
+    check: "bg-sky-600 text-white",
     markOn: "border-sky-300 bg-sky-100 text-sky-800",
     markHint: "border-sky-200 text-sky-700",
-    readEmoji: ["🌿", "🍃", "🌟", "✨", "💎", "⭐"],
+    hearts: ["💙", "💚", "🤍", "💛", "🧡", "💜"],
     weekEmoji: "🌟",
   },
 };
 
-/** The same emoji for a member every day, picked from her or his id */
-export function readEmoji(theme: ShareTheme, memberId: string): string {
-  let h = 0;
-  for (const c of memberId) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return theme.readEmoji[h % theme.readEmoji.length];
+/** The heart for everyone who read on this date: the same colour all day, the next colour the next day */
+export function readHeart(theme: ShareTheme, date: string): string {
+  const day = Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+  return theme.hearts[((day % theme.hearts.length) + theme.hearts.length) % theme.hearts.length];
 }
