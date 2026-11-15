@@ -17,6 +17,7 @@ import GroupTable from "@/components/GroupTable";
 import GroupWeek from "@/components/GroupWeek";
 import { Guide } from "@/components/guide";
 import { Thumb } from "@/components/images";
+import { InstallTip } from "@/components/InstallTip";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, fetchSummaries, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
@@ -184,6 +185,8 @@ function Home({
           </button>
         </span>
       </div>
+
+      <InstallTip t={t} />
 
       {data.initiatives.length === 0 ? (
         <CreateInitiative t={t} data={data} apply={apply} first />
