@@ -61,11 +61,11 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
           <header className="flex items-center gap-3 bg-[var(--deep)] px-[14px] py-4 text-white">
             <Badge target="group" id={group.id} version={group.icon} />
             <div className="min-w-0 flex-1 text-center">
-              <h1 className="truncate text-[22px] leading-tight font-bold">{group.name}</h1>
-              <p className="text-[14px] font-medium text-white/88">
+              {/* No group name: members know their group, and its icon identifies it */}
+              <h1 className="text-[20px] leading-tight font-bold">
                 {t["table.title"].replace("{day}", dayName(date)).replace("{date}", numeric)}
-              </p>
-              {hijri && <p className="text-[12px] text-white/78">{hijri}</p>}
+              </h1>
+              {hijri && <p className="mt-0.5 text-[13px] text-white/80">{hijri}</p>}
             </div>
             {initiative ? (
               <Badge target="initiative" id={initiative.id} version={initiative.logo} />

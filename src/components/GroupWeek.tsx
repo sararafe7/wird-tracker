@@ -10,7 +10,7 @@ import {
   useShareFont,
 } from "@/components/share";
 import { dayTheme, SHARE_THEMES } from "@/components/theme";
-import { fill, type Strings } from "@/components/ui";
+import type { Strings } from "@/components/ui";
 import { type Data, type Group, groupMembers } from "@/lib/store";
 import { addDays, dateValue, hijriRange, weekStars, weekStart } from "@/lib/wird";
 import { cn } from "@/utils/cn";
@@ -36,10 +36,13 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
   const end = addDays(start, 6);
   const hijri = hijriRange(start, end);
   const { stars, perfect } = weekStars(groupMembers(data, group.id), data.records, start);
-  const short = (date: string) => {
-    const d = dateValue(date);
-    return `${d.getDate()}/${d.getMonth() + 1}`;
-  };
+  // «15–21/11», or «29/11–5/12» when the week crosses into the next month
+  const from = dateValue(start);
+  const to = dateValue(end);
+  const range =
+    from.getMonth() === to.getMonth()
+      ? `${from.getDate()}–${to.getDate()}/${to.getMonth() + 1}`
+      : `${from.getDate()}/${from.getMonth() + 1}–${to.getDate()}/${to.getMonth() + 1}`;
 
   return (
     <div
@@ -51,20 +54,15 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
           <header className="flex items-center gap-3 bg-[var(--deep)] px-[14px] py-4 text-white">
             <Badge target="group" id={group.id} version={group.icon} />
             <div className="min-w-0 flex-1 text-center">
-              <p className="truncate text-[22px] leading-tight font-bold">{group.name}</p>
-              <h1 className="mt-0.5 flex items-center justify-center gap-1.5 text-[17px] font-semibold">
+              {/* No group name: members know their group, and its icon identifies it */}
+              <h1 className="flex items-center justify-center gap-1.5 text-[22px] leading-tight font-bold">
                 <Sparkle />
                 {t["week.title"]}
                 <Sparkle className="h-5 w-5 -scale-x-100" />
               </h1>
-              <p className="text-[13px] font-medium text-white/88">{t["week.blessing"]}</p>
-              <p className="text-[14px] font-medium text-white/88">
-                {fill(t["week.range"], {
-                  from: short(start),
-                  to: `${short(end)}/${dateValue(end).getFullYear()}`,
-                })}
+              <p className="mt-0.5 text-[14px] font-medium text-white/88">
+                <bdi dir="ltr">{range}</bdi>
               </p>
-              {hijri && <p className="text-[12px] text-white/78">{hijri}</p>}
             </div>
             <Badge
               target="initiative"
@@ -112,12 +110,16 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
                   ))}
                 </tbody>
               </table>
+              <p className="px-[14px] pt-3 text-center text-[14px] font-semibold text-[var(--deep)]">
+                {t["week.blessing"]}
+              </p>
             </>
           )}
-          <footer className="px-[14px] py-3 text-[11px]">
-            <span className="block truncate font-semibold text-[var(--deep)]">
+          <footer className="flex items-center justify-between gap-2 px-[14px] py-3 text-[11px]">
+            <span className="truncate font-semibold text-[var(--deep)]">
               {initiativeLabel(t, initiative)}
             </span>
+            {hijri && <span className="shrink-0 text-slate-500">{hijri}</span>}
           </footer>
         </div>
       </div>
