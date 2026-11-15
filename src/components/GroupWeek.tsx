@@ -57,6 +57,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
                 {t["week.title"]}
                 <Sparkle className="h-5 w-5 -scale-x-100" />
               </h1>
+              <p className="text-[13px] font-medium text-white/88">{t["week.blessing"]}</p>
               <p className="text-[14px] font-medium text-white/88">
                 {fill(t["week.range"], {
                   from: short(start),
@@ -82,7 +83,7 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
                 <colgroup>
                   <col className="w-[30px]" />
                   <col />
-                  <col className="w-[96px]" />
+                  <col className="w-[124px]" />
                 </colgroup>
                 <tbody className="text-[15px]">
                   {stars.map((s) => (
@@ -91,10 +92,15 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
                       <td className="truncate px-1 font-medium text-slate-900">{s.member.name}</td>
                       <td>
                         {s.days === 7 ? (
-                          // A full week: a golden pill with a star, as a small celebration
-                          <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF0CC] py-0.5 ps-1 pe-2.5 text-[14px] font-semibold text-[#7A5A0E] ring-1 ring-[#F2B533]/60 tabular-nums">
-                            <Star className="h-5 w-5" />
-                            <bdi dir="ltr">7/7</bdi>
+                          // A full week: a golden pill with a star, and a small «ما شاء الله» beneath
+                          <span className="inline-flex flex-col items-center py-1">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-[#FDF0CC] py-0.5 ps-1 pe-2.5 text-[14px] font-semibold text-[#7A5A0E] ring-1 ring-[#F2B533]/60 tabular-nums">
+                              <Star className="h-5 w-5" />
+                              <bdi dir="ltr">7/7</bdi>
+                            </span>
+                            <span className="mt-0.5 text-[10px] font-medium text-[#7A5A0E]">
+                              {t["week.mashallah"]}
+                            </span>
                           </span>
                         ) : (
                           <span className="inline-flex rounded-full bg-[var(--tint)] px-2.5 py-1 text-[14px] font-medium text-[#2A1A22] tabular-nums">

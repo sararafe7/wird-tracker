@@ -20,7 +20,7 @@ import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui
 import { ApiError, fetchSession, fetchSummaries, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
 import { downloadBackup } from "@/lib/backup";
-import { ERROR_EVENT, type ErrorKind, reportError } from "@/lib/errors";
+import { ERROR_EVENT, type ErrorKind, NOTICE_EVENT, reportError, reportSaved } from "@/lib/errors";
 import { newId } from "@/lib/id";
 import { applyOp, type Op, reloadsAfter } from "@/lib/ops";
 import {
@@ -62,18 +62,33 @@ function go(route: Route) {
         : `#/g/${route.groupId}${route.view === "group" ? "" : `/${route.view}`}`;
 }
 
-function setDevEmail(email: string) {
+function setDevEmail(email: string, next?: string) {
   // biome-ignore lint/suspicious/noDocumentCookie: dev-only switch; the Cookie Store API is missing in Firefox and on plain http
   document.cookie = email
     ? `${DEV_EMAIL_COOKIE}=${encodeURIComponent(email)}; path=/; SameSite=Lax`
     : `${DEV_EMAIL_COOKIE}=; path=/; max-age=0`;
-  location.reload();
+  if (next) location.href = next;
+  else location.reload();
 }
 
+/** Marks the return from signing out, so the sign-in screen says «في أمان الله» */
+const BYE_PARAM = "bye";
+
 function signOut() {
-  if (import.meta.env.DEV) setDevEmail("");
-  else location.href = getSignOutUrl(`${location.origin}/`);
+  const back = `${location.origin}/?${BYE_PARAM}=1`;
+  if (import.meta.env.DEV) setDevEmail("", back);
+  else location.href = getSignOutUrl(back);
 }
+
+/** Changes that earn a thank-you once saved: settings and members, not the daily readings */
+const THANKED = new Set<Op["type"]>([
+  "memberAdd",
+  "memberUpdate",
+  "groupSave",
+  "initiativeRename",
+  "imageSet",
+  "supervisorAdd",
+]);
 
 /** The manager field: nobody, someone already in the initiative, or someone new by email */
 interface GroupForm {
@@ -144,7 +159,7 @@ function Home({
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-2 text-sm text-stone-600">
         <span className="min-w-0 truncate">
-          {me.name}
+          {fill(t["home.greeting"], { name: me.name })}
           {me.admin && ` · ${t["role.admin"]}`}
         </span>
         <span className="flex shrink-0 items-center gap-3">
@@ -221,6 +236,7 @@ function CreateInitiative({
 
   return (
     <form onSubmit={create} className="card space-y-4">
+      {first && <p className="text-sm font-semibold text-hasanat">{t["initiative.bismillah"]}</p>}
       <h1 className={cn("font-bold text-slate-900", first ? "text-2xl" : "text-lg")}>
         {t["initiative.create_title"]}
       </h1>
@@ -964,6 +980,7 @@ function Screens({ t }: { t: Strings }) {
   const [loadFailed, setLoadFailed] = useState(false);
   const [route, setRoute] = useState<Route>({ view: "home" });
   const [today, setToday] = useState(() => wirdDate());
+  const [bye] = useState(() => new URLSearchParams(location.search).has(BYE_PARAM));
 
   const reload = useCallback(() => {
     fetchSession()
@@ -980,6 +997,10 @@ function Screens({ t }: { t: Strings }) {
   useEffect(() => {
     reload();
     setRoute(parseHash(location.hash));
+    // The farewell shows once; keep the address clean
+    if (new URLSearchParams(location.search).has(BYE_PARAM)) {
+      history.replaceState(null, "", location.pathname + location.hash);
+    }
     const onHash = () => setRoute(parseHash(location.hash));
     // Pick up changes made on other phones when she comes back to the app
     const onVisible = () => document.visibilityState === "visible" && reload();
@@ -1002,7 +1023,10 @@ function Screens({ t }: { t: Strings }) {
     (op: Op) => {
       setSession((s) => (s?.kind === "ready" ? { ...s, data: applyOp(s.data, op) } : s));
       sendOp(op)
-        .then(() => reloadsAfter(op) && reload())
+        .then(() => {
+          if (THANKED.has(op.type)) reportSaved();
+          if (reloadsAfter(op)) reload();
+        })
         .catch((error) => {
           const status = error instanceof ApiError ? error.status : 0;
           if (status === 409) reportError("email_taken", error);
@@ -1036,6 +1060,7 @@ function Screens({ t }: { t: Strings }) {
       <>
         {dev}
         <div className="card space-y-4 text-center">
+          {bye && <p className="font-semibold text-hasanat">{t["auth.goodbye"]}</p>}
           <h1 className="text-2xl font-bold text-slate-900">{t["auth.title"]}</h1>
           <p className="text-stone-600">{t["auth.intro"]}</p>
           {!import.meta.env.DEV && (
@@ -1145,10 +1170,42 @@ function ErrorBanner({ t }: { t: Strings }) {
   );
 }
 
+/** «جزاكم الله خيرًا» for a moment after settings or members are saved */
+function SavedNotice({ t }: { t: Strings }) {
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    const onSaved = () => setShown(Date.now());
+    window.addEventListener(NOTICE_EVENT, onSaved);
+    return () => window.removeEventListener(NOTICE_EVENT, onSaved);
+  }, []);
+
+  useEffect(() => {
+    if (!shown) return;
+    const id = window.setTimeout(() => setShown(0), 2500);
+    return () => window.clearTimeout(id);
+  }, [shown]);
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-3 bottom-4 z-[70] flex justify-center"
+    >
+      {shown > 0 && (
+        <p className="rounded-full bg-hasanat px-4 py-2 text-sm font-medium text-white shadow-lg">
+          {t["notice.saved"]}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function WirdApp({ t }: { t: Strings }) {
   return (
     <>
       <ErrorBanner t={t} />
+      <SavedNotice t={t} />
       <Screens t={t} />
     </>
   );

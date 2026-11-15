@@ -137,20 +137,23 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
               })}
             </tbody>
           </table>
-          <footer className="flex items-center justify-between gap-2 px-[14px] py-3 text-[11px]">
-            <span className="truncate font-semibold text-[var(--deep)]">
-              {initiativeLabel(t, initiative)}
-            </span>
-            <span className="flex shrink-0 items-center gap-3 text-slate-600">
-              <span className="flex items-center gap-1">
-                <Sun label="" legend />
-                {t["table.legend_kahf"]}
+          <footer className="px-[14px] pt-3 pb-2 text-[11px]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate font-semibold text-[var(--deep)]">
+                {initiativeLabel(t, initiative)}
               </span>
-              <span className="flex items-center gap-1">
-                <Crescent label="" legend />
-                {t["table.legend_mulk"]}
+              <span className="flex shrink-0 items-center gap-3 text-slate-600">
+                <span className="flex items-center gap-1">
+                  <Sun label="" legend />
+                  {t["table.legend_kahf"]}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Crescent label="" legend />
+                  {t["table.legend_mulk"]}
+                </span>
               </span>
-            </span>
+            </div>
+            <p className="mt-1.5 text-center text-[10px] text-slate-500">{t["table.verse"]}</p>
           </footer>
         </div>
       </div>
