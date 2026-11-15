@@ -1,5 +1,6 @@
 import {
   ChevronLeft,
+  ChevronRight,
   Download,
   LogIn,
   LogOut,
@@ -713,7 +714,7 @@ function GroupCard({
   );
 }
 
-/** «إرسال الجدول»: for each week (newest first), one row per group, ✓ or ✗ per day */
+/** «إرسال الجدول»: one week at a time (the current week first), one row per group, ✓ or ✗ per day */
 function SendsGrid({
   t,
   data,
@@ -725,79 +726,93 @@ function SendsGrid({
   groups: Group[];
   today: string;
 }) {
-  const [weeks, setWeeks] = useState(4);
+  const [weeksBack, setWeeksBack] = useState(0); // 0 = the current week
   const days = t["grid.days"].split("،");
   const short = (date: string) => {
     const d = dateValue(date);
     return `${d.getDate()}/${d.getMonth() + 1}`;
   };
-  const first = weekStart(today);
+  const start = addDays(weekStart(today), -7 * weeksBack);
+  const arrow =
+    "rounded-full border border-slate-200 bg-white p-1.5 text-slate-700 hover:bg-slate-50 disabled:opacity-30";
 
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-slate-900">{t["grid.title"]}</h2>
-      {Array.from({ length: weeks }, (_, w) => addDays(first, -7 * w)).map((start) => (
-        <div key={start} className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-          <table className="w-full min-w-[22rem] text-center text-sm">
-            <caption className="px-3 pt-2 text-start text-xs font-medium text-stone-500">
-              <bdi dir="ltr">
-                {short(start)} – {short(addDays(start, 6))}
-              </bdi>
-            </caption>
-            <thead>
-              <tr className="text-xs text-stone-500">
-                <th className="px-2 py-1.5 text-start font-medium">{t["groups.name"]}</th>
-                {days.map((d) => (
-                  <th key={d} className="px-1 py-1.5 font-medium">
-                    {d}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((g) => (
-                <tr key={g.id} className="border-t border-slate-100">
-                  <th
-                    scope="row"
-                    className="max-w-[7rem] truncate px-2 py-1.5 text-start font-medium"
-                  >
-                    {g.name}
-                  </th>
-                  {days.map((_, k) => {
-                    const date = addDays(start, k);
-                    // Nothing to show for days still ahead, or before the group existed
-                    if (date > today || date < g.createdAt) {
-                      return <td key={date} className="px-1 py-1.5 text-stone-300" />;
-                    }
-                    const sent = tableSentOn(data, g.id, date);
-                    return (
-                      <td
-                        key={date}
-                        className={cn(
-                          "px-1 py-1.5 font-semibold",
-                          sent ? "text-emerald-600" : "text-red-400",
-                        )}
-                      >
-                        <span aria-hidden="true">{sent ? "✓" : "✗"}</span>
-                        <span className="sr-only">
-                          {sent ? t["grid.sent"] : t["grid.not_sent"]}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+        {/* Week arrows like the table's day arrows; no going past the current week */}
+        <div className="flex items-center justify-center gap-3 px-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setWeeksBack(weeksBack + 1)}
+            aria-label={t["week.prev"]}
+            className={arrow}
+          >
+            <ChevronRight className="h-4 w-4 ltr:rotate-180" aria-hidden="true" />
+          </button>
+          <span
+            className="min-w-24 text-center text-xs font-medium text-stone-600"
+            aria-live="polite"
+          >
+            <bdi dir="ltr">
+              {short(start)} – {short(addDays(start, 6))}
+            </bdi>
+          </span>
+          <button
+            type="button"
+            onClick={() => setWeeksBack(weeksBack - 1)}
+            disabled={weeksBack === 0}
+            aria-label={t["week.next"]}
+            className={arrow}
+          >
+            <ChevronLeft className="h-4 w-4 ltr:rotate-180" aria-hidden="true" />
+          </button>
         </div>
-      ))}
-      <button
-        type="button"
-        className="btn-secondary w-full !py-2 text-sm"
-        onClick={() => setWeeks(weeks + 4)}
-      >
-        {t["grid.older"]}
-      </button>
+        <table className="w-full min-w-[22rem] text-center text-sm">
+          <thead>
+            <tr className="text-xs text-stone-500">
+              <th className="px-2 py-1.5 text-start font-medium">{t["groups.name"]}</th>
+              {days.map((d) => (
+                <th key={d} className="px-1 py-1.5 font-medium">
+                  {d}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <tr key={g.id} className="border-t border-slate-100">
+                <th
+                  scope="row"
+                  className="max-w-[7rem] truncate px-2 py-1.5 text-start font-medium"
+                >
+                  {g.name}
+                </th>
+                {days.map((_, k) => {
+                  const date = addDays(start, k);
+                  // Nothing to show for days still ahead, or before the group existed
+                  if (date > today || date < g.createdAt) {
+                    return <td key={date} className="px-1 py-1.5 text-stone-300" />;
+                  }
+                  const sent = tableSentOn(data, g.id, date);
+                  return (
+                    <td
+                      key={date}
+                      className={cn(
+                        "px-1 py-1.5 font-semibold",
+                        sent ? "text-emerald-600" : "text-red-400",
+                      )}
+                    >
+                      <span aria-hidden="true">{sent ? "✓" : "✗"}</span>
+                      <span className="sr-only">{sent ? t["grid.sent"] : t["grid.not_sent"]}</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

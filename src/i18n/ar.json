@@ -245,7 +245,6 @@
   "grid.days": "أحد،إثنين،ثلاثاء،أربعاء،خميس،جمعة،سبت",
   "grid.sent": "أُرسِل",
   "grid.not_sent": "لم يُرسَل",
-  "grid.older": "أسابيع أقدم",
   "initiative.delete": "حذف المبادرة",
   "table.sent_button": "أرسلتُ الجدول ✓",
   "table.sent_done": "سُجّل إرسال جدول اليوم",
