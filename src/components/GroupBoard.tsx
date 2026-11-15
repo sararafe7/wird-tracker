@@ -600,13 +600,7 @@ export default function GroupBoard({
       )}
 
       {history && (
-        <MemberHistory
-          t={t}
-          member={history}
-          records={records}
-          today={today}
-          onClose={() => setHistory(null)}
-        />
+        <MemberHistory t={t} member={history} records={records} onClose={() => setHistory(null)} />
       )}
     </div>
   );

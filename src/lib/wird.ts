@@ -167,6 +167,24 @@ export interface MonthStats {
   khatmat: number; // khatmas completed during the month
 }
 
+/**
+ * After all her recorded readings: the last page she reached (null before any pages), and the page
+ * her next wird starts from. `reached` matches the end of the latest month in monthHistory.
+ */
+export function progress(
+  member: Member,
+  records: WirdRecord[],
+): { reached: number | null; next: number } {
+  let offset = member.startPage - 1;
+  let reached: number | null = null;
+  for (const r of memberRecords(records, member.id).sort((a, b) => a.date.localeCompare(b.date))) {
+    const spans = spansAt(offset, recordPages(r));
+    if (spans.length > 0) reached = spans[spans.length - 1].to;
+    offset = tidy(offset + recordPages(r));
+  }
+  return { reached, next: pageAt(offset) };
+}
+
 /** Her readings month by month, newest first */
 export function monthHistory(member: Member, records: WirdRecord[]): MonthStats[] {
   const mine = memberRecords(records, member.id).sort((a, b) => a.date.localeCompare(b.date));

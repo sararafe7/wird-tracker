@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { fill, type Strings } from "@/components/ui";
 import {
   dateValue,
-  dayView,
+  progress,
   khatmat,
   type Member,
   monthHistory,
@@ -14,7 +14,6 @@ interface Props {
   t: Strings;
   member: Member;
   records: WirdRecord[];
-  today: string;
   onClose: () => void;
 }
 
@@ -22,9 +21,10 @@ interface Props {
  * A member's reading history, month by month. Only her group's manager and the initiative's
  * supervisors receive her records, so only they can open it.
  */
-export default function MemberHistory({ t, member, records, today, onClose }: Props) {
+export default function MemberHistory({ t, member, records, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const months = monthHistory(member, records);
+  const { reached, next } = progress(member, records);
   const lang = typeof document === "undefined" ? "ar" : document.documentElement.lang;
 
   useEffect(() => {
@@ -46,10 +46,10 @@ export default function MemberHistory({ t, member, records, today, onClose }: Pr
             <h2 id="history-title" className="truncate text-lg font-semibold text-slate-900">
               {fill(t["history.title"], { name: member.name })}
             </h2>
-            <p className="text-sm text-stone-600">
-              {fill(t["history.current"], { n: dayView(member, records, today).page })}
-              {" · "}
-              {fill(t["wird.khatmat"], { n: khatmat(member, records) })}
+            <p className="flex flex-wrap gap-x-3 text-sm text-stone-600">
+              {reached !== null && <span>{fill(t["history.reached"], { n: reached })}</span>}
+              <span>{fill(t["history.next"], { n: next })}</span>
+              <span>{fill(t["wird.khatmat"], { n: khatmat(member, records) })}</span>
             </p>
           </div>
           <button

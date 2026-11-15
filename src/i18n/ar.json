@@ -196,7 +196,6 @@
   "history.button": "السّجلّ",
   "history.open": "سجلّ {name}",
   "history.title": "سجلّ {name}",
-  "history.current": "الصّفحة الحاليّة: {n}",
   "history.empty": "لا توجد قراءات مسجّلة بعد.",
   "history.month": "الشّهر",
   "history.days": "أيّام القراءة",
@@ -215,5 +214,11 @@
   "table.read#boys": "قرأ",
   "history.range": "من ← إلى",
   "history.khatma": "ختمة",
-  "history.khatma_many": "{n} ختمات"
+  "history.khatma_many": "{n} ختمات",
+  "history.reached": "وصلت إلى صفحة {n}",
+  "history.reached#girls": "وصلت إلى صفحة {n}",
+  "history.reached#boys": "وصل إلى صفحة {n}",
+  "history.next": "وردها القادم يبدأ من صفحة {n}",
+  "history.next#girls": "وردها القادم يبدأ من صفحة {n}",
+  "history.next#boys": "ورده القادم يبدأ من صفحة {n}"
 }
