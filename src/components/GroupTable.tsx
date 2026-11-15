@@ -92,7 +92,10 @@ function Crescent({ label, legend }: { label: string; legend?: boolean }) {
   );
 }
 
-/** Group icon or initiative logo in a white circle; an empty space of the same size keeps the title centred */
+/**
+ * Group icon or initiative logo in a circle of the day's tint with a thin white ring (transparent images
+ * show the tint through); an empty space of the same size keeps the title centred
+ */
 function Badge({
   target,
   id,
@@ -104,7 +107,7 @@ function Badge({
 }) {
   if (!version) return <span className="h-[66px] w-[66px] shrink-0" aria-hidden="true" />;
   return (
-    <span className="h-[66px] w-[66px] shrink-0 overflow-hidden rounded-full bg-white">
+    <span className="h-[66px] w-[66px] shrink-0 overflow-hidden rounded-full bg-[var(--tint)] ring-1 ring-white/60">
       <img src={imageUrl(target, id, version)} alt="" className="h-full w-full object-cover" />
     </span>
   );
@@ -175,8 +178,8 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
               <col className="w-[30px]" />
               <col />
               <col className="w-[100px]" />
-              <col className="w-[40px]" />
-              <col className="w-[40px]" />
+              <col className="w-[46px]" />
+              <col className="w-[46px]" />
             </colgroup>
             <thead>
               <tr className="bg-[var(--tint)] text-[12px] font-semibold text-[var(--deep)]">
@@ -199,8 +202,8 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
                     className={cn("border-b border-[var(--line)]", dense ? "h-[30px]" : "h-[46px]")}
                   >
                     <td className="text-[13px] font-semibold text-[var(--deep)]">{i + 1}</td>
-                    <td className="px-1 text-start font-medium text-slate-900">
-                      <span className="flex items-center gap-1.5">
+                    <td className="px-1 font-medium text-slate-900">
+                      <span className="flex items-center justify-center gap-1.5">
                         <span className="truncate">{m.name}</span>
                         {readEnded && <Heart color={day.heart} label={t["table.read"]} />}
                       </span>
