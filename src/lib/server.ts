@@ -2,12 +2,12 @@ import { IMAGE_MAX_BYTES, type Op } from "@/lib/ops";
 import {
   type Data,
   type Group,
-  type ImageTarget,
   INITIATIVE_LIMIT,
   type Initiative,
   type InitiativeSummary,
   type Mark,
   type Person,
+  type TableSend,
 } from "@/lib/store";
 import type { Member, WirdRecord } from "@/lib/wird";
 
@@ -180,47 +180,59 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
     admin: actor.admin,
     canCreate: true,
   };
-  const empty = { initiatives: [], people: [], groups: [], members: [], records: [], marks: [] };
+  const empty = {
+    initiatives: [],
+    people: [],
+    groups: [],
+    members: [],
+    records: [],
+    marks: [],
+    sends: [],
+  };
   if (!actor.staffId) return { me, ...empty };
 
   const q = (sql: string) => db.prepare(`${VISIBLE} ${sql}`).bind(actor.staffId);
-  const [initiatives, links, people, groups, members, records, marks, created] = await db.batch([
-    q(
-      `SELECT i.id, i.name, i.status, i.logo_version, i.logo_plain,
+  const [initiatives, links, people, groups, members, records, marks, sends, created] =
+    await db.batch([
+      q(
+        `SELECT i.id, i.name, i.status,
          EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?1) AS sup
        FROM initiatives i
        WHERE EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?1)
           OR EXISTS (SELECT 1 FROM groups g WHERE g.initiative_id = i.id AND g.manager_id = ?1)
        ORDER BY i.created_at`,
-    ),
-    q(
-      `SELECT initiative_id, staff_id FROM initiative_supervisors
+      ),
+      q(
+        `SELECT initiative_id, staff_id FROM initiative_supervisors
        WHERE initiative_id IN (SELECT initiative_id FROM sup) ORDER BY created_at`,
-    ),
-    q(
-      `SELECT id, name, email, user_id IS NOT NULL AS linked FROM staff
+      ),
+      q(
+        `SELECT id, name, email, user_id IS NOT NULL AS linked FROM staff
        WHERE id = ?1
           OR id IN (SELECT staff_id FROM initiative_supervisors WHERE initiative_id IN (SELECT initiative_id FROM sup))
           OR id IN (SELECT manager_id FROM groups WHERE initiative_id IN (SELECT initiative_id FROM sup))
        ORDER BY created_at`,
-    ),
-    q(
-      "SELECT id, initiative_id, name, manager_id, audience, icon_version, icon_plain FROM vg ORDER BY created_at",
-    ),
-    q(
-      `SELECT m.id, m.group_id, m.name, m.daily, m.start_page FROM members m
+      ),
+      q(
+        "SELECT id, initiative_id, name, manager_id, audience, icon_version, icon_plain, created_at FROM vg ORDER BY created_at",
+      ),
+      q(
+        `SELECT m.id, m.group_id, m.name, m.daily, m.start_page FROM members m
        JOIN vg ON vg.id = m.group_id ORDER BY m.group_id, m.position, m.created_at`,
-    ),
-    q(
-      `SELECT r.member_id, r.date, r.value, r.daily FROM records r
+      ),
+      q(
+        `SELECT r.member_id, r.date, r.value, r.daily FROM records r
        JOIN members m ON m.id = r.member_id JOIN vg ON vg.id = m.group_id ORDER BY r.date`,
-    ),
-    q(
-      `SELECT k.member_id, k.date, k.kind FROM marks k
+      ),
+      q(
+        `SELECT k.member_id, k.date, k.kind FROM marks k
        JOIN members m ON m.id = k.member_id JOIN vg ON vg.id = m.group_id`,
-    ),
-    q("SELECT COUNT(*) AS n FROM initiatives WHERE created_by = ?1"),
-  ]);
+      ),
+      q(
+        "SELECT s.group_id, s.date FROM table_sends s JOIN vg ON vg.id = s.group_id ORDER BY s.date",
+      ),
+      q("SELECT COUNT(*) AS n FROM initiatives WHERE created_by = ?1"),
+    ]);
 
   type Row = Record<string, unknown>;
   const rows = (r: D1Result) => (r.results ?? []) as Row[];
@@ -238,9 +250,6 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         role: i.sup ? "supervisor" : "manager",
         suspended: i.status !== "active",
         supervisorIds: supervisorIds(String(i.id)),
-        // Suspended initiatives send nothing inside, their logo included
-        logo: i.logo_version && i.status === "active" ? String(i.logo_version) : null,
-        logoPlain: Boolean(i.logo_plain),
       }),
     ),
     people: rows(people).map(
@@ -260,6 +269,7 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         audience: g.audience === "boys" ? "boys" : "girls",
         icon: g.icon_version ? String(g.icon_version) : null,
         iconPlain: Boolean(g.icon_plain),
+        createdAt: String(g.created_at).slice(0, 10),
       }),
     ),
     members: rows(members).map(
@@ -285,6 +295,9 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         date: String(k.date),
         kind: k.kind === "mulk" ? "mulk" : "kahf",
       }),
+    ),
+    sends: rows(sends).map(
+      (x): TableSend => ({ groupId: String(x.group_id), date: String(x.date) }),
     ),
   };
 }
@@ -339,29 +352,22 @@ function checkImage(dataUrl: string) {
 }
 
 /**
- * A logo or group icon, only for someone who may see it: a logo for the initiative's supervisors
- * and managers, an icon for the group's manager and the initiative's supervisors. Never in a
- * suspended initiative. Anything else looks the same as no image.
+ * A group's icon, only for its manager and its initiative's supervisors, and never in a suspended
+ * initiative. Anything else looks the same as no image.
  */
 export async function loadImage(
   db: D1Database,
   actor: Actor,
-  target: ImageTarget,
-  id: string,
+  groupId: string,
 ): Promise<{ mime: string; bytes: Uint8Array<ArrayBuffer> } | null> {
   if (!actor.staffId) return null;
   const row = await db
     .prepare(
-      target === "initiative"
-        ? `SELECT i.logo AS image FROM initiatives i
-           WHERE i.id = ?1 AND i.status = 'active' AND (
-             EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?2)
-             OR EXISTS (SELECT 1 FROM groups g WHERE g.initiative_id = i.id AND g.manager_id = ?2))`
-        : `SELECT g.icon AS image FROM groups g JOIN initiatives i ON i.id = g.initiative_id
-           WHERE g.id = ?1 AND i.status = 'active' AND (g.manager_id = ?2 OR EXISTS (
-             SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = g.initiative_id AND s.staff_id = ?2))`,
+      `SELECT g.icon AS image FROM groups g JOIN initiatives i ON i.id = g.initiative_id
+       WHERE g.id = ?1 AND i.status = 'active' AND (g.manager_id = ?2 OR EXISTS (
+         SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = g.initiative_id AND s.staff_id = ?2))`,
     )
-    .bind(id, actor.staffId)
+    .bind(groupId, actor.staffId)
     .first<{ image: string | null }>();
   return row?.image ? imageBytes(row.image) : null;
 }
@@ -382,34 +388,63 @@ async function requireSupervisorOf(db: D1Database, actor: Actor, initiativeId: s
   if (!row) throw new HttpError(403, "not your initiative");
 }
 
-/** She supervises the group's initiative or manages the group, and the initiative is active */
-async function requireGroup(db: D1Database, actor: Actor, groupId: string) {
+/**
+ * Her part in a group of an active initiative: its manager (even if she also supervises the
+ * initiative, she acts as its manager), or a supervisor of its initiative, who looks on and
+ * looks after its members.
+ */
+async function groupRole(
+  db: D1Database,
+  actor: Actor,
+  groupId: string,
+): Promise<"manager" | "supervisor"> {
   const row = await db
     .prepare(
-      `SELECT 1 FROM groups g JOIN initiatives i ON i.id = g.initiative_id
-       WHERE g.id = ?1 AND i.status = 'active' AND (g.manager_id = ?2 OR EXISTS (
-         SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = g.initiative_id AND s.staff_id = ?2))`,
+      `SELECT g.manager_id = ?2 AS manager, EXISTS (
+         SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = g.initiative_id AND s.staff_id = ?2
+       ) AS sup
+       FROM groups g JOIN initiatives i ON i.id = g.initiative_id
+       WHERE g.id = ?1 AND i.status = 'active'`,
     )
     .bind(groupId, actor.staffId)
-    .first();
+    .first<{ manager: number | null; sup: number }>();
   // Missing and not hers look the same, so ids from other initiatives reveal nothing
-  if (!row) throw new HttpError(403, "not your group");
+  if (!row || (!row.manager && !row.sup)) throw new HttpError(403, "not your group");
+  return row.manager ? "manager" : "supervisor";
 }
 
-async function requireMember(db: D1Database, actor: Actor, memberId: string): Promise<string> {
+/** Daily work (readings, Kahf/Mulk, order, the table, the icon) is the group's manager's */
+async function requireManagerOf(db: D1Database, actor: Actor, groupId: string) {
+  if ((await groupRole(db, actor, groupId)) !== "manager") {
+    throw new HttpError(403, "the group's manager only");
+  }
+}
+
+async function memberGroup(db: D1Database, memberId: string): Promise<string> {
   const member = await db
     .prepare("SELECT group_id FROM members WHERE id = ?")
     .bind(memberId)
     .first<{ group_id: string }>();
   if (!member) throw new HttpError(403, "not your group");
-  await requireGroup(db, actor, member.group_id);
   return member.group_id;
+}
+
+/** Kahf is ticked on the Thursday or Friday it counts for */
+function isThursdayOrFriday(date: string): boolean {
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return day === 4 || day === 5;
+}
+
+/** A table can be marked sent for a recent day only, not far back or ahead */
+function isRecentDate(date: string): boolean {
+  const t = Date.parse(`${date}T12:00:00Z`);
+  return t > Date.now() - 8 * 86_400_000 && t < Date.now() + 2 * 86_400_000;
 }
 
 export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void> {
   switch (op.type) {
     case "recordSet":
-      await requireMember(db, actor, op.memberId);
+      await requireManagerOf(db, actor, await memberGroup(db, op.memberId));
       // A new record snapshots her daily pages; changing the value keeps the snapshot
       await db
         .prepare(
@@ -421,14 +456,18 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
         .run();
       return;
     case "recordRemove":
-      await requireMember(db, actor, op.memberId);
+      await requireManagerOf(db, actor, await memberGroup(db, op.memberId));
       await db
         .prepare("DELETE FROM records WHERE member_id = ? AND date = ?")
         .bind(op.memberId, op.date)
         .run();
       return;
     case "markSet":
-      await requireMember(db, actor, op.memberId);
+      await requireManagerOf(db, actor, await memberGroup(db, op.memberId));
+      // Un-ticking an old Kahf is always allowed, so older marks can still be cleaned up
+      if (op.kind === "kahf" && op.on && !isThursdayOrFriday(op.date)) {
+        throw new HttpError(400, "Kahf is ticked on Thursday or Friday");
+      }
       await db
         .prepare(
           op.on
@@ -439,7 +478,7 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
         .run();
       return;
     case "memberAdd":
-      await requireGroup(db, actor, op.groupId);
+      await groupRole(db, actor, op.groupId);
       await db
         .prepare(
           `INSERT INTO members (id, group_id, name, daily, start_page, position)
@@ -449,18 +488,19 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
         .run();
       return;
     case "memberUpdate":
-      await requireMember(db, actor, op.id);
+      await groupRole(db, actor, await memberGroup(db, op.id));
       await db
         .prepare("UPDATE members SET name = ?, daily = ?, start_page = ? WHERE id = ?")
         .bind(op.name, op.daily, op.startPage, op.id)
         .run();
       return;
     case "memberRemove":
-      await requireMember(db, actor, op.id);
+      await groupRole(db, actor, await memberGroup(db, op.id));
       await db.prepare("DELETE FROM members WHERE id = ?").bind(op.id).run();
       return;
     case "memberMove": {
-      const groupId = await requireMember(db, actor, op.id);
+      const groupId = await memberGroup(db, op.id);
+      await requireManagerOf(db, actor, groupId);
       const { results } = await db
         .prepare("SELECT id FROM members WHERE group_id = ? ORDER BY position, created_at")
         .bind(groupId)
@@ -544,32 +584,40 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "imageSet": {
-      if (op.target === "initiative") await requireSupervisorOf(db, actor, op.id);
-      else await requireGroup(db, actor, op.id);
+      await requireManagerOf(db, actor, op.id);
       if (op.image !== null) checkImage(op.image);
-      // Removing the image also resets the option; a new upload keeps it unless told otherwise
-      const sql =
-        op.target === "initiative"
-          ? "UPDATE initiatives SET logo = ?1, logo_version = ?2, logo_plain = CASE WHEN ?1 IS NULL THEN 0 ELSE COALESCE(?3, logo_plain) END WHERE id = ?4"
-          : "UPDATE groups SET icon = ?1, icon_version = ?2, icon_plain = CASE WHEN ?1 IS NULL THEN 0 ELSE COALESCE(?3, icon_plain) END WHERE id = ?4";
+      // Removing the icon also resets the option; a new upload keeps it unless told otherwise
       const version = op.image === null ? null : crypto.randomUUID().slice(0, 8);
       const plain = op.plain === undefined ? null : op.plain ? 1 : 0;
-      await db.prepare(sql).bind(op.image, version, plain, op.id).run();
-      return;
-    }
-    case "imagePlain": {
-      if (op.target === "initiative") await requireSupervisorOf(db, actor, op.id);
-      else await requireGroup(db, actor, op.id);
       await db
         .prepare(
-          op.target === "initiative"
-            ? "UPDATE initiatives SET logo_plain = ? WHERE id = ?"
-            : "UPDATE groups SET icon_plain = ? WHERE id = ?",
+          `UPDATE groups SET icon = ?1, icon_version = ?2,
+             icon_plain = CASE WHEN ?1 IS NULL THEN 0 ELSE COALESCE(?3, icon_plain) END
+           WHERE id = ?4`,
         )
-        .bind(op.plain ? 1 : 0, op.id)
+        .bind(op.image, version, plain, op.id)
         .run();
       return;
     }
+    case "imagePlain":
+      await requireManagerOf(db, actor, op.id);
+      await db
+        .prepare("UPDATE groups SET icon_plain = ? WHERE id = ?")
+        .bind(op.plain ? 1 : 0, op.id)
+        .run();
+      return;
+    case "tableSent":
+      await requireManagerOf(db, actor, op.groupId);
+      if (!isRecentDate(op.date)) throw new HttpError(400, "not a recent day");
+      await db
+        .prepare(
+          op.sent
+            ? "INSERT OR IGNORE INTO table_sends (group_id, date) VALUES (?, ?)"
+            : "DELETE FROM table_sends WHERE group_id = ? AND date = ?",
+        )
+        .bind(op.groupId, op.date)
+        .run();
+      return;
     case "supervisorAdd": {
       await requireSupervisorOf(db, actor, op.initiativeId);
       const personId = await findOrAddPerson(db, op);
@@ -606,7 +654,8 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "initiativeDelete": {
-      requireAdmin(actor);
+      // App admins, or the initiative's own supervisors (who must type its name too)
+      if (!actor.admin) await requireSupervisorOf(db, actor, op.id);
       const { results: people } = await db
         .prepare(
           `SELECT staff_id AS id FROM initiative_supervisors WHERE initiative_id = ?1

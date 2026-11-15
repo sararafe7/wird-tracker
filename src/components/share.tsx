@@ -1,11 +1,11 @@
 import type { CSSProperties } from "react";
 import { useEffect } from "react";
 import type { DayTheme } from "@/components/theme";
-import { type ImageTarget, imageUrl } from "@/lib/store";
+import { imageUrl } from "@/lib/store";
 
 /**
  * Pieces shared by the screenshot views (the daily table and the weekly card), so both follow
- * the same design: El Messiri, the day's colour theme, drawn icons, and the icon/logo circles.
+ * the same design: El Messiri, the day's colour theme, drawn icons, and the group icon's circle.
  */
 
 const FONT_ID = "font-el-messiri";
@@ -80,17 +80,15 @@ export function Crescent({ label, legend }: { label: string; legend?: boolean })
 }
 
 /**
- * Group icon or initiative logo in a circle of the day's tint with a thin white ring (transparent images
+ * The group icon in a circle of the day's tint with a thin white ring (transparent images
  * show the tint through), or straight on the header when the image asks for no circle.
  * An empty space of the same size keeps the title centred.
  */
 export function Badge({
-  target,
   id,
   version,
   plain = false,
 }: {
-  target: ImageTarget;
   id: string;
   version: string | null;
   plain?: boolean; // the image straight on the header, same size, nothing cropped (light logos)
@@ -99,7 +97,7 @@ export function Badge({
   if (plain) {
     return (
       <img
-        src={imageUrl(target, id, version)}
+        src={imageUrl(id, version)}
         alt=""
         className="h-[66px] w-[66px] shrink-0 object-contain"
       />
@@ -107,7 +105,7 @@ export function Badge({
   }
   return (
     <span className="h-[66px] w-[66px] shrink-0 overflow-hidden rounded-full bg-[var(--tint)] ring-1 ring-white/60">
-      <img src={imageUrl(target, id, version)} alt="" className="h-full w-full object-cover" />
+      <img src={imageUrl(id, version)} alt="" className="h-full w-full object-cover" />
     </span>
   );
 }

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Send, X } from "lucide-react";
 import { useState } from "react";
 import {
   Badge,
@@ -11,8 +11,17 @@ import {
 } from "@/components/share";
 import { dayTheme, SHARE_THEMES } from "@/components/theme";
 import type { Strings } from "@/components/ui";
-import { type Data, type Group, groupMembers, hasMark } from "@/lib/store";
-import { addDays, dateValue, dayName, dayView, fridayOnOrBefore, hijriDate } from "@/lib/wird";
+import type { Op } from "@/lib/ops";
+import {
+  type Data,
+  type Group,
+  groupMembers,
+  hasMark,
+  isGroupManager,
+  kahfLight,
+  tableSentOn,
+} from "@/lib/store";
+import { addDays, dateValue, dayName, dayView, hijriDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
 interface Props {
@@ -20,22 +29,23 @@ interface Props {
   data: Data;
   group: Group;
   today: string;
+  apply: (op: Op) => void;
   onClose: () => void;
 }
 
 /**
  * Screenshot-ready table of the next day's wird, sized to fit one phone screen.
  * Pages are for the table's date; the heart and Mulk report the day that just ended.
- * Kahf reports the most recent Friday and stays all week, so a missed Kahf shows until the next Friday.
+ * Kahf shows the most recent Friday's tick all week, so a missed Kahf shows until the next one (see kahfLight).
+ * The group's manager marks here that she sent today's table («أرسلتُ الجدول ✓»).
  * The whole table takes its colours from the day's heart.
  */
-export default function GroupTable({ t, data, group, today, onClose }: Props) {
+export default function GroupTable({ t, data, group, today, apply, onClose }: Props) {
   useShareFont();
   const [date, setDate] = useState(() => addDays(today, 1));
   const ended = addDays(date, -1);
   const day = dayTheme(SHARE_THEMES[group.audience], ended);
   const initiative = data.initiatives.find((i) => i.id === group.initiativeId);
-  const friday = fridayOnOrBefore(ended);
   const members = groupMembers(data, group.id);
   const d = dateValue(date);
   const numeric = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
@@ -44,10 +54,9 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
   const dense = members.length > 18;
   const colours = shareStyle(day);
   // Kahf read any day from the most recent Friday up to the day that just ended
-  const kahfDone = (memberId: string) =>
-    data.marks.some(
-      (k) => k.memberId === memberId && k.kind === "kahf" && k.date >= friday && k.date <= ended,
-    );
+  const manager = isGroupManager(data, group);
+  // Sending happens today, for tomorrow's wird, whichever day the table is showing
+  const sentToday = tableSentOn(data, group.id, today);
   const navButton = shareNavButton;
 
   return (
@@ -58,7 +67,7 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
       <div className="mx-auto w-full max-w-md flex-1 px-3 pt-4 pb-2">
         <div className="overflow-hidden rounded-[24px] bg-white shadow-[0_8px_24px_rgba(30,20,40,.12)]">
           <header className="flex items-center gap-3 bg-[var(--deep)] px-[14px] py-4 text-white">
-            <Badge target="group" id={group.id} version={group.icon} plain={group.iconPlain} />
+            <Badge id={group.id} version={group.icon} plain={group.iconPlain} />
             <div className="min-w-0 flex-1 text-center">
               {/* No group name: members know their group, and its icon identifies it */}
               <h1 className="text-[20px] leading-tight font-bold">
@@ -66,16 +75,8 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
               </h1>
               {hijri && <p className="mt-0.5 text-[13px] text-white/80">{hijri}</p>}
             </div>
-            {initiative ? (
-              <Badge
-                target="initiative"
-                id={initiative.id}
-                version={initiative.logo}
-                plain={initiative.logoPlain}
-              />
-            ) : (
-              <Badge target="initiative" id="" version={null} />
-            )}
+            {/* The same width on the other side keeps the title centred */}
+            <Badge id="" version={null} />
           </header>
           <table className="w-full table-fixed text-center">
             <colgroup>
@@ -130,7 +131,7 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
                         )}
                       </span>
                     </td>
-                    <td>{kahfDone(m.id) && <Sun label={t["marks.kahf"]} />}</td>
+                    <td>{kahfLight(data.marks, m.id, ended) && <Sun label={t["marks.kahf"]} />}</td>
                     <td>
                       {hasMark(data.marks, m.id, ended, "mulk") && (
                         <Crescent label={t["marks.mulk"]} />
@@ -162,31 +163,64 @@ export default function GroupTable({ t, data, group, today, onClose }: Props) {
         </div>
       </div>
 
-      <nav className="sticky bottom-0 flex items-center justify-center gap-2 bg-[var(--page)]/95 px-3 py-3">
-        <button
-          type="button"
-          onClick={() => setDate(addDays(date, -1))}
-          aria-label={t["table.prev_day"]}
-          className={cn(navButton, "p-2")}
-        >
-          <ChevronRight className="h-5 w-5 ltr:rotate-180" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className={cn(navButton, "inline-flex items-center gap-1 px-4 py-2 text-sm font-medium")}
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-          {t["table.close"]}
-        </button>
-        <button
-          type="button"
-          onClick={() => setDate(addDays(date, 1))}
-          aria-label={t["table.next_day"]}
-          className={cn(navButton, "p-2")}
-        >
-          <ChevronLeft className="h-5 w-5 ltr:rotate-180" aria-hidden="true" />
-        </button>
+      <nav className="sticky bottom-0 bg-[var(--page)]/95 px-3 py-3">
+        {manager && (
+          <div className="mx-auto mb-2 flex max-w-md justify-center">
+            {sentToday ? (
+              <button
+                type="button"
+                onClick={() =>
+                  apply({ type: "tableSent", groupId: group.id, date: today, sent: false })
+                }
+                className={cn(shareNavButton, "inline-flex items-center gap-1.5 px-4 py-2 text-sm")}
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />
+                {t["table.sent_done"]}
+                <span className="text-slate-500">· {t["table.sent_undo"]}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  apply({ type: "tableSent", groupId: group.id, date: today, sent: true })
+                }
+                className="inline-flex items-center gap-1.5 rounded-full bg-[var(--deep)] px-5 py-2.5 text-sm font-semibold text-white shadow"
+              >
+                <Send className="h-4 w-4" aria-hidden="true" />
+                {t["table.sent_button"]}
+              </button>
+            )}
+          </div>
+        )}
+        <div className="flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDate(addDays(date, -1))}
+            aria-label={t["table.prev_day"]}
+            className={cn(navButton, "p-2")}
+          >
+            <ChevronRight className="h-5 w-5 ltr:rotate-180" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className={cn(
+              navButton,
+              "inline-flex items-center gap-1 px-4 py-2 text-sm font-medium",
+            )}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+            {t["table.close"]}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDate(addDays(date, 1))}
+            aria-label={t["table.next_day"]}
+            className={cn(navButton, "p-2")}
+          >
+            <ChevronLeft className="h-5 w-5 ltr:rotate-180" aria-hidden="true" />
+          </button>
+        </div>
       </nav>
     </div>
   );

@@ -57,12 +57,11 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("initiativeCreate"), id, name }),
   // Its supervisors, or any app admin
   z.object({ type: z.literal("initiativeRename"), id, name }),
-  // A logo for an initiative (its supervisors) or an icon for a group (its manager or supervisors);
+  // A group's icon, set by the group's manager only;
   // null removes it. Resized on the phone; the server checks the bytes too.
   z.object({
     type: z.literal("imageSet"),
-    target: z.enum(["initiative", "group"]),
-    id,
+    id, // the group
     image: z
       .string()
       .max(IMAGE_MAX_DATA_URL)
@@ -74,10 +73,11 @@ export const opSchema = z.discriminatedUnion("type", [
   // The same option for an image already uploaded
   z.object({
     type: z.literal("imagePlain"),
-    target: z.enum(["initiative", "group"]),
-    id,
+    id, // the group
     plain: z.boolean(),
   }),
+  // «أرسلتُ الجدول ✓», or undone with sent: false; the group's manager only
+  z.object({ type: z.literal("tableSent"), groupId: id, date, sent: z.boolean() }),
   z.object({ type: z.literal("supervisorAdd"), initiativeId: id, ...person.shape }),
   z.object({ type: z.literal("supervisorRemove"), initiativeId: id, personId: id }),
   // App admins only
@@ -98,6 +98,7 @@ const INSTANT = new Set<Op["type"]>([
   "memberRemove",
   "memberMove",
   "groupRemove",
+  "tableSent",
 ]);
 
 export function reloadsAfter(op: Op): boolean {
@@ -144,6 +145,10 @@ export function applyOp(data: Data, op: Op): Data {
     case "groupRemove": {
       const gone = new Set(data.members.filter((m) => m.groupId === op.id).map((m) => m.id));
       return { ...withoutMembers(data, gone), groups: data.groups.filter((g) => g.id !== op.id) };
+    }
+    case "tableSent": {
+      const rest = data.sends.filter((x) => !(x.groupId === op.groupId && x.date === op.date));
+      return { ...data, sends: op.sent ? [...rest, { groupId: op.groupId, date: op.date }] : rest };
     }
     default:
       return data;

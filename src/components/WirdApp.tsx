@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
 import GroupWeek from "@/components/GroupWeek";
-import { ImagePicker, Thumb } from "@/components/images";
+import { Thumb } from "@/components/images";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, fetchSummaries, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
@@ -28,14 +28,17 @@ import {
   canRemoveSupervisor,
   type Data,
   type Group,
+  groupHealth,
   groupMembers,
+  type GroupStatus,
   type Initiative,
   type InitiativeSummary,
   initiativeGroups,
   type Person,
   personName,
+  tableSentOn,
 } from "@/lib/store";
-import { dayView, wirdDate } from "@/lib/wird";
+import { addDays, dateValue, dayView, weekStart, wirdDate } from "@/lib/wird";
 import { cn } from "@/utils/cn";
 
 const DEV_EMAIL_COOKIE = "wird_dev_email";
@@ -359,12 +362,6 @@ function InitiativeSection({
             id={`initiative-${initiative.id}`}
             className="flex min-w-0 items-center gap-2 text-2xl font-bold text-slate-900"
           >
-            <Thumb
-              target="initiative"
-              id={initiative.id}
-              version={initiative.logo}
-              className="h-9 w-9"
-            />
             <span className="truncate">{initiative.name}</span>
           </h1>
           <span className="flex shrink-0 items-center gap-1 text-sm text-stone-500">
@@ -394,46 +391,51 @@ function InitiativeSection({
               <p className="card text-stone-600">{t["groups.empty_manager"]}</p>
             )
           )}
-          <ul className="space-y-2">
-            {groups.map((g) => {
-              const members = groupMembers(data, g.id);
-              const done = members.filter((m) => dayView(m, data.records, today).record).length;
-              return (
-                <li
+          {supervisor ? (
+            <ul className="space-y-2">
+              {groups.map((g) => (
+                <GroupCard
                   key={g.id}
-                  className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white"
-                >
-                  <a href={`#/g/${g.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
-                    <Thumb target="group" id={g.id} version={g.icon} className="h-10 w-10" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-slate-900">{g.name}</p>
-                      <p className="text-sm text-stone-500">
-                        {t[`audience.${g.audience}`]}
-                        {" · "}
-                        {personName(data, g.managerId) ?? t["groups.no_manager"]}
-                        {" · "}
-                        {fill(t["wird.progress"], { done, total: members.length })}
-                      </p>
-                    </div>
-                    <ChevronLeft
-                      className="h-5 w-5 shrink-0 text-stone-400 ltr:rotate-180"
-                      aria-hidden="true"
-                    />
-                  </a>
-                  {supervisor && (
-                    <button
-                      type="button"
-                      onClick={() => edit(g)}
-                      aria-label={fill(t["wird.edit"], { name: g.name })}
-                      className="me-2 rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-slate-700"
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                  t={t}
+                  data={data}
+                  group={g}
+                  today={today}
+                  onEdit={() => edit(g)}
+                />
+              ))}
+            </ul>
+          ) : (
+            <ul className="space-y-2">
+              {groups.map((g) => {
+                const members = groupMembers(data, g.id);
+                const done = members.filter((m) => dayView(m, data.records, today).record).length;
+                return (
+                  <li
+                    key={g.id}
+                    className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white"
+                  >
+                    <a href={`#/g/${g.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
+                      <Thumb id={g.id} version={g.icon} className="h-10 w-10" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-semibold text-slate-900">{g.name}</p>
+                        <p className="text-sm text-stone-500">
+                          {t[`audience.${g.audience}`]}
+                          {" · "}
+                          {personName(data, g.managerId) ?? t["groups.no_manager"]}
+                          {" · "}
+                          {fill(t["wird.progress"], { done, total: members.length })}
+                        </p>
+                      </div>
+                      <ChevronLeft
+                        className="h-5 w-5 shrink-0 text-stone-400 ltr:rotate-180"
+                        aria-hidden="true"
+                      />
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
           {supervisor && !groupForm && (
             <button
@@ -559,21 +561,16 @@ function InitiativeSection({
             </form>
           )}
 
+          {supervisor && groups.length > 0 && (
+            <SendsGrid t={t} data={data} groups={groups} today={today} />
+          )}
+
           {supervisor && (
             <SupervisorsSection t={t} data={data} apply={apply} initiative={initiative} />
           )}
 
           {supervisor && (
             <div className="card space-y-4 !p-4">
-              <ImagePicker
-                t={t}
-                target="initiative"
-                id={initiative.id}
-                version={initiative.logo}
-                plain={initiative.logoPlain}
-                label={t["image.initiative_label"]}
-                apply={apply}
-              />
               <button
                 type="button"
                 className="btn-secondary w-full !py-2 text-sm"
@@ -582,11 +579,239 @@ function InitiativeSection({
                 <Download className="h-4 w-4" aria-hidden="true" />
                 {t["backup.initiative_button"]}
               </button>
+              <DeleteInitiative t={t} initiative={initiative} apply={apply} />
             </div>
           )}
         </>
       )}
     </section>
+  );
+}
+
+const STATUS_BAR: Record<GroupStatus, string> = {
+  green: "bg-emerald-500",
+  yellow: "bg-amber-400",
+  red: "bg-red-500",
+};
+
+/** «اليوم ✓», «آخر إرسال قبل 3 أيّام», or «لم يُرسَل الجدول بعد» */
+function sentLabel(t: Strings, days: number | null): string {
+  if (days === null) return t["sends.never"];
+  if (days === 0) return t["sends.today"];
+  if (days === 1) return t["sends.yesterday"];
+  if (days === 2) return t["sends.two"];
+  return fill(t[days <= 10 ? "sends.few" : "sends.many"], { n: days });
+}
+
+/** A supervisor's view of one group: how it is doing at a glance; tapping it opens the details */
+function GroupCard({
+  t,
+  data,
+  group,
+  today,
+  onEdit,
+}: {
+  t: Strings;
+  data: Data;
+  group: Group;
+  today: string;
+  onEdit: () => void;
+}) {
+  const h = groupHealth(data, group, today);
+  const ta = audienceStrings(t, group.audience);
+  return (
+    <li className="flex items-stretch overflow-hidden rounded-2xl border border-slate-100 bg-white">
+      <span className={cn("w-1.5 shrink-0", STATUS_BAR[h.status])} aria-hidden="true" />
+      <a href={`#/g/${group.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
+        <Thumb id={group.id} version={group.icon} className="h-11 w-11" />
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className="truncate font-semibold text-slate-900">
+            {group.name}
+            <span className="sr-only">: {t[`status.${h.status}`]}</span>
+          </p>
+          <p className="truncate text-xs text-stone-500">
+            {personName(data, group.managerId) ?? t["groups.no_manager"]}
+          </p>
+          <p className="flex flex-wrap gap-x-3 text-sm text-slate-700">
+            <span>{fill(t["card.members"], { n: h.members })}</span>
+            <span>{fill(ta["card.active"], { n: h.active, total: h.members })}</span>
+          </p>
+          <p
+            className={cn(
+              "text-sm font-medium",
+              h.status === "red"
+                ? "text-red-700"
+                : h.sentDaysAgo === 0
+                  ? "text-emerald-700"
+                  : "text-amber-700",
+            )}
+          >
+            {sentLabel(t, h.sentDaysAgo)}
+          </p>
+        </div>
+        <ChevronLeft
+          className="h-5 w-5 shrink-0 text-stone-400 ltr:rotate-180"
+          aria-hidden="true"
+        />
+      </a>
+      <button
+        type="button"
+        onClick={onEdit}
+        aria-label={fill(t["wird.edit"], { name: group.name })}
+        className="me-2 self-center rounded-lg p-2 text-stone-500 hover:bg-slate-50 hover:text-slate-700"
+      >
+        <Pencil className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </li>
+  );
+}
+
+/** «إرسال الجدول»: for each week (newest first), one row per group, ✓ or ✗ per day */
+function SendsGrid({
+  t,
+  data,
+  groups,
+  today,
+}: {
+  t: Strings;
+  data: Data;
+  groups: Group[];
+  today: string;
+}) {
+  const [weeks, setWeeks] = useState(4);
+  const days = t["grid.days"].split("،");
+  const short = (date: string) => {
+    const d = dateValue(date);
+    return `${d.getDate()}/${d.getMonth() + 1}`;
+  };
+  const first = weekStart(today);
+
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold text-slate-900">{t["grid.title"]}</h2>
+      {Array.from({ length: weeks }, (_, w) => addDays(first, -7 * w)).map((start) => (
+        <div key={start} className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+          <table className="w-full min-w-[22rem] text-center text-sm">
+            <caption className="px-3 pt-2 text-start text-xs font-medium text-stone-500">
+              <bdi dir="ltr">
+                {short(start)} – {short(addDays(start, 6))}
+              </bdi>
+            </caption>
+            <thead>
+              <tr className="text-xs text-stone-500">
+                <th className="px-2 py-1.5 text-start font-medium">{t["groups.name"]}</th>
+                {days.map((d) => (
+                  <th key={d} className="px-1 py-1.5 font-medium">
+                    {d}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((g) => (
+                <tr key={g.id} className="border-t border-slate-100">
+                  <th
+                    scope="row"
+                    className="max-w-[7rem] truncate px-2 py-1.5 text-start font-medium"
+                  >
+                    {g.name}
+                  </th>
+                  {days.map((_, k) => {
+                    const date = addDays(start, k);
+                    // Nothing to show for days still ahead, or before the group existed
+                    if (date > today || date < g.createdAt) {
+                      return <td key={date} className="px-1 py-1.5 text-stone-300" />;
+                    }
+                    const sent = tableSentOn(data, g.id, date);
+                    return (
+                      <td
+                        key={date}
+                        className={cn(
+                          "px-1 py-1.5 font-semibold",
+                          sent ? "text-emerald-600" : "text-red-400",
+                        )}
+                      >
+                        <span aria-hidden="true">{sent ? "✓" : "✗"}</span>
+                        <span className="sr-only">
+                          {sent ? t["grid.sent"] : t["grid.not_sent"]}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn-secondary w-full !py-2 text-sm"
+        onClick={() => setWeeks(weeks + 4)}
+      >
+        {t["grid.older"]}
+      </button>
+    </section>
+  );
+}
+
+/** A supervisor deletes her initiative: she types its name to confirm */
+function DeleteInitiative({
+  t,
+  initiative,
+  apply,
+}: {
+  t: Strings;
+  initiative: Initiative;
+  apply: (op: Op) => void;
+}) {
+  const [typed, setTyped] = useState<string | null>(null);
+  if (typed === null) {
+    return (
+      <button
+        type="button"
+        className="btn-secondary w-full !py-2 text-sm text-red-700"
+        onClick={() => setTyped("")}
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+        {t["initiative.delete"]}
+      </button>
+    );
+  }
+  const matches = typed.trim() === initiative.name;
+  return (
+    <form
+      className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (matches) apply({ type: "initiativeDelete", id: initiative.id, name: initiative.name });
+      }}
+    >
+      <p className="text-sm font-medium text-red-800">
+        {fill(t["admin.delete_title"], { name: initiative.name })}
+      </p>
+      <label className="block space-y-1 text-sm text-red-800">
+        <span>{t["admin.delete_warning"]}</span>
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          className={inputClass}
+          autoComplete="off"
+        />
+      </label>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={!matches}
+          className="btn-primary flex-1 !bg-red-700 disabled:opacity-50"
+        >
+          {t["admin.delete_confirm"]}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => setTyped(null)}>
+          {t["common.cancel"]}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -1089,6 +1314,7 @@ function Screens({ t }: { t: Strings }) {
           data={data}
           group={group}
           today={today}
+          apply={apply}
           onClose={() => go({ view: "group", groupId: group.id })}
         />
       );

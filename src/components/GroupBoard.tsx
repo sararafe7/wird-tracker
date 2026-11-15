@@ -23,10 +23,12 @@ import { newId } from "@/lib/id";
 import type { Op } from "@/lib/ops";
 import {
   canManageMembers,
+  isGroupManager,
   type Data,
   type Group,
   groupMembers,
   hasMark,
+  tableSentOn,
   type MarkKind,
 } from "@/lib/store";
 import {
@@ -90,7 +92,9 @@ export default function GroupBoard({
 
   const { records, marks } = data;
   const members = groupMembers(data, group.id);
+  // Members: the manager and the supervisors. Daily work: the group's manager only (isGroupManager)
   const canManage = canManageMembers(data, group);
+  const manager = isGroupManager(data, group);
   const theme = SHARE_THEMES[group.audience];
 
   function record(m: Member, value: number | null) {
@@ -175,7 +179,10 @@ export default function GroupBoard({
     month: "long",
   })}`;
   const hijri = hijriDate(date, false);
-  const isFriday = dateValue(date).getDay() === 5;
+  const weekday = dateValue(date).getDay();
+  const isFriday = weekday === 5;
+  // Kahf is ticked on the Thursday or Friday it counts for
+  const marksToday = MARKS.filter((kind) => kind !== "kahf" || weekday === 4 || weekday === 5);
   const monthStart = `${date.slice(0, 7)}-01`;
   const monthEnd = `${date.slice(0, 7)}-31`;
   const doneCount = members.filter((m) => dayView(m, records, date).record).length;
@@ -195,7 +202,7 @@ export default function GroupBoard({
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-              <Thumb target="group" id={group.id} version={group.icon} className="h-9 w-9" />
+              <Thumb id={group.id} version={group.icon} className="h-9 w-9" />
               <span className="truncate">{group.name}</span>
             </h1>
             <p className="text-sm text-stone-500">
@@ -242,15 +249,17 @@ export default function GroupBoard({
               <Star className="h-4 w-4" aria-hidden="true" />
               {t["week.title"]}
             </button>
-            <button
-              type="button"
-              className="btn-secondary !px-4 !py-2 text-sm"
-              onClick={copyUnread}
-            >
-              <ClipboardCopy className="h-4 w-4" aria-hidden="true" />
-              {t["board.copy_unread"]}
-            </button>
-            {canManage && members.length > 1 && (
+            {manager && (
+              <button
+                type="button"
+                className="btn-secondary !px-4 !py-2 text-sm"
+                onClick={copyUnread}
+              >
+                <ClipboardCopy className="h-4 w-4" aria-hidden="true" />
+                {t["board.copy_unread"]}
+              </button>
+            )}
+            {manager && members.length > 1 && (
               <button
                 type="button"
                 aria-pressed={reorder}
@@ -265,6 +274,11 @@ export default function GroupBoard({
               </button>
             )}
           </div>
+        )}
+        {manager && members.length > 0 && !tableSentOn(data, group.id, today) && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {t["board.not_sent"]}
+          </p>
         )}
         <p className="text-sm text-hasanat-dark" aria-live="polite">
           {status}
@@ -310,26 +324,42 @@ export default function GroupBoard({
               )}
             >
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => toggle(m)}
-                  onPointerDown={() => startPress(m.id)}
-                  onPointerUp={endPress}
-                  onPointerLeave={endPress}
-                  onPointerCancel={endPress}
-                  onContextMenu={(e) => e.preventDefault()}
-                  aria-pressed={done}
-                  aria-label={fill(done ? t["wird.unmark"] : t["wird.mark"], { name: m.name })}
-                  className={cn(
-                    "flex h-12 w-12 shrink-0 select-none items-center justify-center rounded-full border-2 transition-colors",
-                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-hasanat/50 focus-visible:ring-offset-2",
-                    done
-                      ? "border-hasanat bg-hasanat text-white"
-                      : "border-slate-300 text-transparent",
-                  )}
-                >
-                  <Check className="h-6 w-6" aria-hidden="true" />
-                </button>
+                {manager ? (
+                  <button
+                    type="button"
+                    onClick={() => toggle(m)}
+                    onPointerDown={() => startPress(m.id)}
+                    onPointerUp={endPress}
+                    onPointerLeave={endPress}
+                    onPointerCancel={endPress}
+                    onContextMenu={(e) => e.preventDefault()}
+                    aria-pressed={done}
+                    aria-label={fill(done ? t["wird.unmark"] : t["wird.mark"], { name: m.name })}
+                    className={cn(
+                      "flex h-12 w-12 shrink-0 select-none items-center justify-center rounded-full border-2 transition-colors",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-hasanat/50 focus-visible:ring-offset-2",
+                      done
+                        ? "border-hasanat bg-hasanat text-white"
+                        : "border-slate-300 text-transparent",
+                    )}
+                  >
+                    <Check className="h-6 w-6" aria-hidden="true" />
+                  </button>
+                ) : (
+                  // A supervisor sees the day's reading without changing it
+                  <span
+                    role="img"
+                    aria-label={done ? t["table.read"] : t["board.not_read"]}
+                    className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2",
+                      done
+                        ? "border-hasanat/60 bg-hasanat/10 text-hasanat"
+                        : "border-slate-200 text-transparent",
+                    )}
+                  >
+                    <Check className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-900">
                     <span className="text-stone-500">{index + 1}.</span> {m.name}
@@ -376,20 +406,22 @@ export default function GroupBoard({
                   </div>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      onClick={() => openPicker(m.id)}
-                      aria-expanded={picker === m.id}
-                      aria-label={fill(t["wird.value_for"], { name: m.name })}
-                      className={cn(
-                        "min-w-11 rounded-lg border px-2 py-1.5 text-sm font-medium",
-                        done
-                          ? "border-hasanat/40 text-hasanat-dark"
-                          : "border-slate-200 text-stone-500",
-                      )}
-                    >
-                      <bdi dir="ltr">×{done ? v.record?.value : ""}</bdi>
-                    </button>
+                    {manager && (
+                      <button
+                        type="button"
+                        onClick={() => openPicker(m.id)}
+                        aria-expanded={picker === m.id}
+                        aria-label={fill(t["wird.value_for"], { name: m.name })}
+                        className={cn(
+                          "min-w-11 rounded-lg border px-2 py-1.5 text-sm font-medium",
+                          done
+                            ? "border-hasanat/40 text-hasanat-dark"
+                            : "border-slate-200 text-stone-500",
+                        )}
+                      >
+                        <bdi dir="ltr">×{done ? v.record?.value : ""}</bdi>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setHistory(m)}
@@ -420,9 +452,9 @@ export default function GroupBoard({
                 )}
               </div>
 
-              {!reorder && (
+              {!reorder && manager && (
                 <div className="mt-2 flex gap-2 ps-15">
-                  {MARKS.map((kind) => {
+                  {marksToday.map((kind) => {
                     const on = hasMark(marks, m.id, date, kind);
                     return (
                       <button
@@ -446,7 +478,24 @@ export default function GroupBoard({
                 </div>
               )}
 
-              {picker === m.id && !reorder && (
+              {!manager && MARKS.some((kind) => hasMark(marks, m.id, date, kind)) && (
+                <div className="mt-2 flex gap-2 ps-13">
+                  {MARKS.filter((kind) => hasMark(marks, m.id, date, kind)).map((kind) => (
+                    <span
+                      key={kind}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium",
+                        theme.markOn,
+                      )}
+                    >
+                      <Check className="me-1 inline h-3 w-3" aria-hidden="true" />
+                      {t[`marks.${kind}`]}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {manager && picker === m.id && !reorder && (
                 <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                   <p className="text-xs text-stone-500">
                     {fill(t["wird.value_hint"], { n: m.daily })}
@@ -580,15 +629,16 @@ export default function GroupBoard({
 
       {canManage && !form && !reorder && (
         <section className="card space-y-4 !p-4">
-          <ImagePicker
-            t={t}
-            target="group"
-            id={group.id}
-            version={group.icon}
-            plain={group.iconPlain}
-            label={t["image.group_label"]}
-            apply={apply}
-          />
+          {manager && (
+            <ImagePicker
+              t={t}
+              id={group.id}
+              version={group.icon}
+              plain={group.iconPlain}
+              label={t["image.group_label"]}
+              apply={apply}
+            />
+          )}
           <button
             type="button"
             className="btn-secondary w-full !py-2 text-sm"

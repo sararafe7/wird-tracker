@@ -1,4 +1,4 @@
-import type { Member, WirdRecord } from "@/lib/wird";
+import { addDays, dateValue, fridayOnOrBefore, type Member, type WirdRecord } from "@/lib/wird";
 
 /**
  * App data as the server sends it, mirroring the D1 tables
@@ -32,8 +32,6 @@ export interface Initiative {
   role: Role;
   suspended: boolean; // closed by an app admin; nothing inside it is sent
   supervisorIds: string[]; // only filled in for initiatives she supervises
-  logo: string | null; // version of its logo, or null for none
-  logoPlain: boolean; // shown without the tinted circle on screenshot headers
 }
 
 /** What app admins see of every initiative: no member names or records */
@@ -60,6 +58,7 @@ export interface Group {
   audience: Audience;
   icon: string | null; // version of its icon, or null for none
   iconPlain: boolean; // shown without the tinted circle on screenshot headers
+  createdAt: string; // YYYY-MM-DD
 }
 
 export type MarkKind = "kahf" | "mulk";
@@ -79,13 +78,18 @@ export interface Data {
   members: Member[]; // array order is the numbering order within each group
   records: WirdRecord[];
   marks: Mark[];
+  sends: TableSend[]; // the days each group's table was sent
 }
 
-/** Logos and group icons are served separately, so the data stays small; the version makes each URL cacheable */
-export type ImageTarget = "initiative" | "group";
+/** «أرسلتُ الجدول ✓»: the group's manager sent the daily table on WhatsApp that day */
+export interface TableSend {
+  groupId: string;
+  date: string;
+}
 
-export function imageUrl(target: ImageTarget, id: string, version: string): string {
-  return `/api/image/${target}/${encodeURIComponent(id)}?v=${version}`;
+/** Group icons are served separately, so the data stays small; the version makes each URL cacheable */
+export function imageUrl(groupId: string, version: string): string {
+  return `/api/image/group/${encodeURIComponent(groupId)}?v=${version}`;
 }
 
 export function initiativeGroups(data: Data, initiativeId: string): Group[] {
@@ -96,9 +100,65 @@ export function personName(data: Data, id: string | null): string | undefined {
   return data.people.find((p) => p.id === id)?.name;
 }
 
-/** Adding, editing, reordering and removing members: anyone who may open the group */
+/** Adding, editing and removing members: the group's manager and its initiative's supervisors */
 export function canManageMembers(data: Data, group: Group): boolean {
   return data.groups.some((g) => g.id === group.id);
+}
+
+/**
+ * The group's manager does the daily work: readings, Kahf/Mulk, order, the table, the icon.
+ * A supervisor who manages the group herself does it as its manager.
+ */
+export function isGroupManager(data: Data, group: Group): boolean {
+  return data.me.staffId !== null && group.managerId === data.me.staffId;
+}
+
+export function tableSentOn(data: Data, groupId: string, date: string): boolean {
+  return data.sends.some((s) => s.groupId === groupId && s.date === date);
+}
+
+/** The latest day the group's table was sent, up to `today`, or null */
+export function lastSent(data: Data, groupId: string, today: string): string | null {
+  let last: string | null = null;
+  for (const s of data.sends) {
+    if (s.groupId === groupId && s.date <= today && (!last || s.date > last)) last = s.date;
+  }
+  return last;
+}
+
+export type GroupStatus = "green" | "yellow" | "red";
+
+export interface GroupHealth {
+  members: number;
+  active: number; // at least one reading in the last 7 days
+  sentDaysAgo: number | null; // 0 = today; null = never
+  status: GroupStatus;
+}
+
+const dayNumber = (date: string) => Math.round(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
+
+/**
+ * How a group is doing, for its supervisor: green when today's table was sent and at least
+ * two-thirds of its members read in the last 7 days; red when no table was sent for 3 days or more
+ * (or ever); yellow in between.
+ */
+export function groupHealth(data: Data, group: Group, today: string): GroupHealth {
+  const members = groupMembers(data, group.id);
+  const weekAgo = dayNumber(today) - 6;
+  const active = members.filter((m) =>
+    data.records.some(
+      (r) => r.memberId === m.id && r.date <= today && dayNumber(r.date) >= weekAgo,
+    ),
+  ).length;
+  const last = lastSent(data, group.id, today);
+  const sentDaysAgo = last === null ? null : dayNumber(today) - dayNumber(last);
+  const status: GroupStatus =
+    sentDaysAgo === null || sentDaysAgo >= 3
+      ? "red"
+      : sentDaysAgo === 0 && members.length > 0 && active * 3 >= members.length * 2
+        ? "green"
+        : "yellow";
+  return { members: members.length, active, sentDaysAgo, status };
 }
 
 /** An initiative always keeps at least one supervisor */
@@ -120,6 +180,18 @@ export function moveMember(members: Member[], id: string, dir: -1 | 1): Member[]
   const next = [...members];
   [next[i], next[j]] = [next[j], next[i]];
   return next;
+}
+
+/**
+ * The Kahf light on a day: a tick on the Thursday or Friday of the most recent Friday up to that day.
+ * On a Thursday, that day's own tick counts too (for the coming Friday), so the light never goes
+ * out on Thursday; from Saturday, only that week's Thursday or Friday tick counts.
+ */
+export function kahfLight(marks: Mark[], memberId: string, date: string): boolean {
+  const friday = fridayOnOrBefore(date);
+  const days = [addDays(friday, -1), friday];
+  if (dateValue(date).getDay() === 4) days.push(date);
+  return marks.some((k) => k.memberId === memberId && k.kind === "kahf" && days.includes(k.date));
 }
 
 export function hasMark(marks: Mark[], memberId: string, date: string, kind: MarkKind): boolean {
