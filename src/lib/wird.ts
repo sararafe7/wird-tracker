@@ -155,6 +155,8 @@ export interface MonthStats {
   month: string; // YYYY-MM
   days: number; // days with a record, including 0
   pages: number;
+  from: number | null; // first page she read that month; null if she read no pages
+  to: number | null; // last page she read that month
   khatmat: number; // khatmas completed during the month
 }
 
@@ -165,7 +167,19 @@ export function monthHistory(member: Member, records: WirdRecord[]): MonthStats[
   let offset = member.startPage - 1;
   for (const r of mine) {
     const key = r.date.slice(0, 7);
-    const m = months.get(key) ?? { month: key, days: 0, pages: 0, khatmat: 0 };
+    const m = months.get(key) ?? {
+      month: key,
+      days: 0,
+      pages: 0,
+      from: null,
+      to: null,
+      khatmat: 0,
+    };
+    const spans = spansAt(offset, recordPages(r));
+    if (spans.length > 0) {
+      m.from ??= spans[0].from;
+      m.to = spans[spans.length - 1].to;
+    }
     const before = Math.floor(offset / TOTAL_PAGES);
     offset = tidy(offset + recordPages(r));
     m.days += 1;

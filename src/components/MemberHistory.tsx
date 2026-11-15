@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Sparkles, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { fill, type Strings } from "@/components/ui";
 import {
@@ -70,21 +70,39 @@ export default function MemberHistory({ t, member, records, today, onClose }: Pr
                 <th className="py-2 text-start font-medium">{t["history.month"]}</th>
                 <th className="py-2 font-medium">{t["history.days"]}</th>
                 <th className="py-2 font-medium">{t["history.pages"]}</th>
-                <th className="py-2 font-medium">{t["history.khatmat"]}</th>
+                <th className="py-2 font-medium">{t["history.range"]}</th>
               </tr>
             </thead>
             <tbody>
               {months.map((m) => (
                 <tr key={m.month} className="border-b border-slate-100 last:border-0">
                   <td className="py-2 text-start">
-                    {dateValue(`${m.month}-01`).toLocaleDateString(lang, {
-                      month: "long",
-                      year: "numeric",
-                    })}
+                    <span className="block">
+                      {dateValue(`${m.month}-01`).toLocaleDateString(lang, {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </span>
+                    {m.khatmat > 0 && (
+                      <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                        <Sparkles className="h-3 w-3" aria-hidden="true" />
+                        {m.khatmat > 1
+                          ? fill(t["history.khatma_many"], { n: m.khatmat })
+                          : t["history.khatma"]}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 text-center tabular-nums">{m.days}</td>
                   <td className="py-2 text-center tabular-nums">{m.pages}</td>
-                  <td className="py-2 text-center tabular-nums">{m.khatmat}</td>
+                  <td className="py-2 text-center tabular-nums whitespace-nowrap">
+                    {m.from === null ? (
+                      "–"
+                    ) : (
+                      <>
+                        {m.from} <span className="text-hasanat">←</span> {m.to}
+                      </>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

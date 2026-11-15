@@ -1,10 +1,18 @@
 import type { Strings } from "@/components/ui";
-import { type Data, type Group, groupMembers, personName } from "@/lib/store";
+import {
+  type Data,
+  type Group,
+  groupMembers,
+  hasMark,
+  type MarkKind,
+  personName,
+} from "@/lib/store";
 import { dayView, khatmat, recordPages } from "@/lib/wird";
 import { type Cell, type Sheet, xlsx } from "@/lib/xlsx";
 
 /**
- * A backup of some groups as an Excel file: members, readings, and Kahf/Mulk marks.
+ * A backup of some groups as an Excel file: one summary row per member, and one row per member per day
+ * (reading and Kahf/Mulk marks).
  * Built in the browser from the data the server already sent her, so it can only hold what she may see.
  */
 export function backupFile(t: Strings, data: Data, groups: Group[], today: string): Blob {
@@ -41,33 +49,47 @@ export function backupFile(t: Strings, data: Data, groups: Group[], today: strin
     ],
   };
 
+  // One row per member per day: every day with a reading or a Kahf/Mulk mark
+  const days = new Map<string, { memberId: string; date: string }>();
+  for (const x of [...data.records, ...data.marks]) {
+    if (byId.has(x.memberId))
+      days.set(`${x.memberId} ${x.date}`, { memberId: x.memberId, date: x.date });
+  }
   const readingsSheet: Sheet = {
     name: t["backup.sheet_readings"],
     rows: [
-      [t["backup.group"], t["form.name"], t["backup.date"], t["backup.value"], t["backup.pages"]],
-      ...[...data.records]
+      [
+        t["backup.group"],
+        t["form.name"],
+        t["backup.date"],
+        t["backup.value"],
+        t["backup.pages"],
+        t["marks.kahf"],
+        t["marks.mulk"],
+      ],
+      ...[...days.values()]
         .sort((a, b) => a.date.localeCompare(b.date))
-        .flatMap((r): Cell[][] => {
-          const x = byId.get(r.memberId);
-          return x ? [[x.g.name, x.m.name, r.date, r.value, recordPages(r)]] : [];
+        .flatMap(({ memberId, date }): Cell[][] => {
+          const x = byId.get(memberId);
+          if (!x) return [];
+          const r = data.records.find((rec) => rec.memberId === memberId && rec.date === date);
+          const tick = (kind: MarkKind) => (hasMark(data.marks, memberId, date, kind) ? "✓" : null);
+          return [
+            [
+              x.g.name,
+              x.m.name,
+              date,
+              r ? r.value : null,
+              r ? recordPages(r) : null,
+              tick("kahf"),
+              tick("mulk"),
+            ],
+          ];
         }),
     ],
   };
 
-  const marksSheet: Sheet = {
-    name: t["backup.sheet_marks"],
-    rows: [
-      [t["backup.group"], t["form.name"], t["backup.date"], t["backup.surah"]],
-      ...[...data.marks]
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .flatMap((k): Cell[][] => {
-          const x = byId.get(k.memberId);
-          return x ? [[x.g.name, x.m.name, k.date, t[`marks.${k.kind}`]]] : [];
-        }),
-    ],
-  };
-
-  return xlsx([membersSheet, readingsSheet, marksSheet]);
+  return xlsx([membersSheet, readingsSheet]);
 }
 
 /** Save the backup on her device */
