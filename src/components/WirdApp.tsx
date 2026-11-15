@@ -1,7 +1,6 @@
 import {
   ChevronLeft,
   Download,
-  HelpCircle,
   LogIn,
   LogOut,
   Pencil,
@@ -15,6 +14,7 @@ import { useCallback, useEffect, useState } from "react";
 import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
 import GroupWeek from "@/components/GroupWeek";
+import { Guide } from "@/components/guide";
 import { Thumb } from "@/components/images";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, fetchSummaries, type Session, sendOp } from "@/lib/api";
@@ -28,6 +28,7 @@ import {
   canRemoveSupervisor,
   type Data,
   type Group,
+  type GroupHealth,
   groupHealth,
   groupMembers,
   type GroupStatus,
@@ -385,13 +386,19 @@ function InitiativeSection({
       ) : (
         <>
           {supervisor ? (
-            <StartGuide t={t} initiativeId={initiative.id} empty={groups.length === 0} />
+            <Guide
+              t={t}
+              id={initiative.id}
+              empty={groups.length === 0}
+              emptyText={t["groups.empty_supervisor"]}
+              steps={[t["guide.step1"], t["guide.step2"], t["guide.step3"]]}
+            />
           ) : (
             groups.length === 0 && (
               <p className="card text-stone-600">{t["groups.empty_manager"]}</p>
             )
           )}
-          {supervisor ? (
+          {supervisor && (
             <ul className="space-y-2">
               {groups.map((g) => (
                 <GroupCard
@@ -404,7 +411,9 @@ function InitiativeSection({
                 />
               ))}
             </ul>
-          ) : (
+          )}
+          {supervisor && groups.length > 0 && <StatusLegend t={t} />}
+          {!supervisor && (
             <ul className="space-y-2">
               {groups.map((g) => {
                 const members = groupMembers(data, g.id);
@@ -547,14 +556,14 @@ function InitiativeSection({
                 {groupForm.id && (
                   <button
                     type="button"
-                    className="btn-secondary text-red-700"
-                    aria-label={t["form.delete"]}
+                    className="btn-secondary w-full text-red-700"
                     onClick={() => {
                       const g = groups.find((x) => x.id === groupForm.id);
                       if (g) removeGroup(g);
                     }}
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    {t["groups.delete"]}
                   </button>
                 )}
               </div>
@@ -594,6 +603,35 @@ const STATUS_BAR: Record<GroupStatus, string> = {
   red: "bg-red-500",
 };
 
+/** Why a card is yellow or red, in one short line; nothing for green */
+function statusReason(t: Strings, h: GroupHealth): string | null {
+  if (h.status === "green") return null;
+  if (h.sentDaysAgo === null) return t["reason.never"];
+  if (h.sentDaysAgo >= 3) {
+    return fill(t[h.sentDaysAgo <= 10 ? "reason.days" : "reason.days_many"], { n: h.sentDaysAgo });
+  }
+  if (h.sentDaysAgo > 0) return t["reason.not_today"];
+  if (h.members === 0) return t["board.empty_readonly"];
+  return fill(t["reason.few_read"], { n: h.active, total: h.members });
+}
+
+/** What the card colours mean, under the cards */
+function StatusLegend({ t }: { t: Strings }) {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-xs text-stone-600">
+      {(["green", "yellow", "red"] as const).map((s) => (
+        <li key={s} className="flex items-center gap-1.5">
+          <span
+            className={cn("h-2.5 w-2.5 shrink-0 rounded-full", STATUS_BAR[s])}
+            aria-hidden="true"
+          />
+          {t[`legend.${s}`]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** «اليوم ✓», «آخر إرسال قبل 3 أيّام», or «لم يُرسَل الجدول بعد» */
 function sentLabel(t: Strings, days: number | null): string {
   if (days === null) return t["sends.never"];
@@ -619,6 +657,7 @@ function GroupCard({
 }) {
   const h = groupHealth(data, group, today);
   const ta = audienceStrings(t, group.audience);
+  const reason = statusReason(ta, h);
   return (
     <li className="flex items-stretch overflow-hidden rounded-2xl border border-slate-100 bg-white">
       <span className={cn("w-1.5 shrink-0", STATUS_BAR[h.status])} aria-hidden="true" />
@@ -636,18 +675,26 @@ function GroupCard({
             <span>{fill(t["card.members"], { n: h.members })}</span>
             <span>{fill(ta["card.active"], { n: h.active, total: h.members })}</span>
           </p>
-          <p
-            className={cn(
-              "text-sm font-medium",
-              h.status === "red"
-                ? "text-red-700"
-                : h.sentDaysAgo === 0
-                  ? "text-emerald-700"
-                  : "text-amber-700",
-            )}
-          >
-            {sentLabel(t, h.sentDaysAgo)}
-          </p>
+          {/* A red card's reason already says how long no table was sent */}
+          {h.status !== "red" && (
+            <p
+              className={cn(
+                "text-sm font-medium",
+                h.sentDaysAgo === 0 ? "text-emerald-700" : "text-amber-700",
+              )}
+            >
+              {sentLabel(t, h.sentDaysAgo)}
+            </p>
+          )}
+          {reason && (
+            <p
+              className={
+                h.status === "red" ? "text-sm font-medium text-red-700" : "text-xs text-amber-800"
+              }
+            >
+              {reason}
+            </p>
+          )}
         </div>
         <ChevronLeft
           className="h-5 w-5 shrink-0 text-stone-400 ltr:rotate-180"
@@ -812,87 +859,6 @@ function DeleteInitiative({
         </button>
       </div>
     </form>
-  );
-}
-
-/**
- * First steps for a supervisor: open by itself while the initiative has no groups,
- * and again from «كيف أبدأ؟». Closing it is remembered on this device.
- */
-function StartGuide({
-  t,
-  initiativeId,
-  empty,
-}: {
-  t: Strings;
-  initiativeId: string;
-  empty: boolean;
-}) {
-  const key = `wird:guide-closed:${initiativeId}`;
-  const [closed, setClosed] = useState(() => {
-    try {
-      return localStorage.getItem(key) === "1";
-    } catch {
-      return false;
-    }
-  });
-  const [open, setOpen] = useState(false);
-
-  function close() {
-    setOpen(false);
-    setClosed(true);
-    try {
-      localStorage.setItem(key, "1");
-    } catch {
-      // Private browsing: it just opens again next time
-    }
-  }
-
-  if (!open && !(empty && !closed)) {
-    return (
-      <div className="space-y-2">
-        {empty && <p className="card text-stone-600">{t["groups.empty_supervisor"]}</p>}
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1 text-sm text-hasanat hover:underline"
-        >
-          <HelpCircle className="h-4 w-4" aria-hidden="true" />
-          {t["guide.title"]}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <section
-      className="card space-y-3 border-hasanat/30 bg-hasanat/5"
-      aria-labelledby={`guide-${initiativeId}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h2 id={`guide-${initiativeId}`} className="text-lg font-semibold text-slate-900">
-          {t["guide.title"]}
-        </h2>
-        <button
-          type="button"
-          onClick={close}
-          aria-label={t["guide.close"]}
-          className="rounded-lg p-1.5 text-stone-500 hover:bg-white hover:text-slate-700"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
-      </div>
-      <ol className="space-y-3">
-        {["guide.step1", "guide.step2", "guide.step3"].map((key, i) => (
-          <li key={key} className="flex gap-3">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-hasanat text-sm font-semibold text-white">
-              {i + 1}
-            </span>
-            <span className="pt-0.5 text-sm text-slate-700">{t[key]}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
   );
 }
 
