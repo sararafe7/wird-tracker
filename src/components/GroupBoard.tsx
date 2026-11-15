@@ -96,9 +96,6 @@ export default function GroupBoard({
   // Members: the manager and the supervisors. Daily work: the group's manager only (isGroupManager)
   const canManage = canManageMembers(data, group);
   const manager = isGroupManager(data, group);
-  // Supervisors of the initiative delete groups; managers don't
-  const supervisor =
-    data.initiatives.find((i) => i.id === group.initiativeId)?.role === "supervisor";
   const theme = SHARE_THEMES[group.audience];
 
   function record(m: Member, value: number | null) {
@@ -660,20 +657,6 @@ export default function GroupBoard({
             <Download className="h-4 w-4" aria-hidden="true" />
             {t["backup.group_button"]}
           </button>
-          {supervisor && (
-            <button
-              type="button"
-              className="btn-secondary w-full !py-2 text-sm text-red-700"
-              onClick={() => {
-                if (!confirm(fill(t["groups.delete_confirm"], { name: group.name }))) return;
-                apply({ type: "groupRemove", id: group.id });
-                onBack();
-              }}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              {t["groups.delete"]}
-            </button>
-          )}
         </section>
       )}
 
