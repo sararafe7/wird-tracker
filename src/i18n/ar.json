@@ -273,5 +273,6 @@
   "install.close": "إخفاء النّصيحة",
   "guide.step4": "اختياريًّا: ضَع/ي صورة للمبادرة تظهر في جداول كلّ مجموعاتها.",
   "history.total_days": "مجموع أيّام القراءة منذ البداية: {n}",
-  "image.initiative_label": "صورة المبادرة"
+  "image.initiative_label": "صورة المبادرة",
+  "error.name_taken": "لديك مبادرة بهذا الاسم"
 }

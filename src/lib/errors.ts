@@ -6,6 +6,7 @@ export type ErrorKind =
   | "email_taken"
   | "forbidden"
   | "limit"
+  | "name_taken"
   | "image"
   | "unexpected";
 

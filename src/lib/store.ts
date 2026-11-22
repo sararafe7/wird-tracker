@@ -92,6 +92,22 @@ export function imageUrl(initiativeId: string, version: string): string {
   return `/api/image/initiative/${encodeURIComponent(initiativeId)}?v=${version}`;
 }
 
+/**
+ * Two initiative names count as the same when they match without spaces, Arabic diacritics (harakat,
+ * tanween, shadda) and tatweel: «مبادرة رواق» = «مبادرةرواق» = «مبادرةُ رِواق».
+ */
+export function sameName(a: string, b: string): boolean {
+  const key = (s: string) => s.replace(/[\s\u0640\u064B-\u065F\u0670]/gu, "").toLowerCase();
+  return key(a) === key(b);
+}
+
+/** She already supervises another initiative with this name */
+export function hasInitiativeNamed(data: Data, name: string, exceptId?: string): boolean {
+  return data.initiatives.some(
+    (i) => i.role === "supervisor" && i.id !== exceptId && sameName(i.name, name),
+  );
+}
+
 export function initiativeGroups(data: Data, initiativeId: string): Group[] {
   return data.groups.filter((g) => g.initiativeId === initiativeId);
 }

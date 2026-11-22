@@ -3,6 +3,7 @@ import {
   type Data,
   type Group,
   INITIATIVE_LIMIT,
+  sameName,
   type Initiative,
   type InitiativeSummary,
   type Mark,
@@ -431,6 +432,28 @@ async function memberGroup(db: D1Database, memberId: string): Promise<string> {
   return member.group_id;
 }
 
+/**
+ * Whether any of these people already supervises an initiative with this name (see sameName),
+ * other than `exceptId`. Different accounts may use the same name.
+ */
+async function namedInitiativeOf(
+  db: D1Database,
+  staffIds: string[],
+  name: string,
+  exceptId = "",
+): Promise<boolean> {
+  if (staffIds.length === 0) return false;
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT i.id, i.name FROM initiatives i
+       JOIN initiative_supervisors s ON s.initiative_id = i.id
+       WHERE s.staff_id IN (SELECT value FROM json_each(?1)) AND i.id <> ?2`,
+    )
+    .bind(JSON.stringify(staffIds), exceptId)
+    .all<{ id: string; name: string }>();
+  return results.some((i) => sameName(i.name, name));
+}
+
 /** Kahf is ticked on the Thursday or Friday it counts for */
 function isThursdayOrFriday(date: string): boolean {
   const day = new Date(`${date}T12:00:00Z`).getUTCDay();
@@ -553,6 +576,9 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "initiativeCreate": {
+      if (actor.staffId && (await namedInitiativeOf(db, [actor.staffId], op.name))) {
+        throw new HttpError(409, "name taken");
+      }
       const staffId = await ensureStaff(db, actor);
       // One statement checks the limit and adds it, so quick repeats can't pass the limit
       const { meta } = await db
@@ -578,6 +604,21 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
     }
     case "initiativeRename": {
       if (!actor.admin) await requireSupervisorOf(db, actor, op.id);
+      // None of its supervisors may end up with two initiatives of the same name
+      const { results: sups } = await db
+        .prepare("SELECT staff_id FROM initiative_supervisors WHERE initiative_id = ?")
+        .bind(op.id)
+        .all<{ staff_id: string }>();
+      if (
+        await namedInitiativeOf(
+          db,
+          sups.map((x) => x.staff_id),
+          op.name,
+          op.id,
+        )
+      ) {
+        throw new HttpError(409, "name taken");
+      }
       const { meta } = await db
         .prepare("UPDATE initiatives SET name = ? WHERE id = ?")
         .bind(op.name, op.id)

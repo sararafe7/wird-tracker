@@ -34,6 +34,7 @@ import {
   type GroupHealth,
   groupHealth,
   groupMembers,
+  hasInitiativeNamed,
   type GroupStatus,
   type Initiative,
   type InitiativeSummary,
@@ -233,11 +234,12 @@ function CreateInitiative({
   onCancel?: () => void;
 }) {
   const [name, setName] = useState("");
+  const taken = name.trim() !== "" && hasInitiativeNamed(data, name);
 
   function create(e: { preventDefault(): void }) {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || taken) return;
     apply({ type: "initiativeCreate", id: newId(), name: trimmed });
     setName("");
     onCancel?.();
@@ -257,8 +259,10 @@ function CreateInitiative({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t["initiative.name_placeholder"]}
+          aria-invalid={taken}
           className={inputClass}
         />
+        {taken && <span className="block text-sm text-red-700">{t["error.name_taken"]}</span>}
       </label>
       <div className="flex gap-2">
         <button type="submit" className="btn-primary flex-1">
@@ -476,6 +480,7 @@ function InitiativeSection({
           t={t}
           name={initiative.name}
           label={t["initiative.name"]}
+          taken={(name) => hasInitiativeNamed(data, name, initiative.id)}
           onSave={(name) => {
             apply({ type: "initiativeRename", id: initiative.id, name });
             setRenaming(false);
@@ -1031,20 +1036,24 @@ function RenameForm({
   label,
   onSave,
   onCancel,
+  taken,
 }: {
   t: Strings;
   name: string;
   label: string;
   onSave: (name: string) => void;
   onCancel: () => void;
+  taken?: (name: string) => boolean; // she already has an initiative with this name
 }) {
   const [value, setValue] = useState(name);
+  const isTaken = value.trim() !== "" && value.trim() !== name && (taken?.(value) ?? false);
   return (
     <form
       className="flex flex-wrap items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         const trimmed = value.trim();
+        if (isTaken) return;
         if (trimmed && trimmed !== name) onSave(trimmed);
         else onCancel();
       }}
@@ -1055,8 +1064,10 @@ function RenameForm({
           required
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          aria-invalid={isTaken}
           className={inputClass}
         />
+        {isTaken && <span className="block text-sm text-red-700">{t["error.name_taken"]}</span>}
       </label>
       <button type="submit" className="btn-primary">
         {t["common.save"]}
@@ -1094,7 +1105,8 @@ function AdminPage({
     try {
       await sendOp(op);
     } catch (error) {
-      reportError(error instanceof ApiError && error.status === 403 ? "forbidden" : "save", error);
+      const status = error instanceof ApiError ? error.status : 0;
+      reportError(status === 403 ? "forbidden" : status === 409 ? "name_taken" : "save", error);
     }
     setDeleting(null);
     setRenaming(null);
@@ -1283,7 +1295,12 @@ function Screens({ t }: { t: Strings }) {
         })
         .catch((error) => {
           const status = error instanceof ApiError ? error.status : 0;
-          if (status === 409) reportError("email_taken", error);
+          if (
+            status === 409 &&
+            (op.type === "initiativeCreate" || op.type === "initiativeRename")
+          ) {
+            reportError("name_taken", error);
+          } else if (status === 409) reportError("email_taken", error);
           else if (status === 403) reportError("forbidden", error);
           else if (status === 429) reportError("limit", error);
           else if (status === 400 && op.type === "imageSet") reportError("image", error);
