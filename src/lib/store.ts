@@ -106,7 +106,7 @@ export function canManageMembers(data: Data, group: Group): boolean {
 }
 
 /**
- * The group's manager does the daily work: readings, Kahf/Mulk, order, the table, the icon.
+ * The group's manager does the daily work: readings, Kahf/Mulk, order, the table.
  * A supervisor who manages the group herself does it as its manager.
  */
 export function isGroupManager(data: Data, group: Group): boolean {

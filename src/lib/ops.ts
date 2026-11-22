@@ -57,7 +57,7 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("initiativeCreate"), id, name }),
   // Its supervisors, or any app admin
   z.object({ type: z.literal("initiativeRename"), id, name }),
-  // A group's icon, set by the group's manager only;
+  // A group's icon, set by its initiative's supervisors only;
   // null removes it. Resized on the phone; the server checks the bytes too.
   z.object({
     type: z.literal("imageSet"),

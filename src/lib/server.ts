@@ -413,11 +413,21 @@ async function groupRole(
   return row.manager ? "manager" : "supervisor";
 }
 
-/** Daily work (readings, Kahf/Mulk, order, the table, the icon) is the group's manager's */
+/** Daily work (readings, Kahf/Mulk, order, the table) is the group's manager's */
 async function requireManagerOf(db: D1Database, actor: Actor, groupId: string) {
   if ((await groupRole(db, actor, groupId)) !== "manager") {
     throw new HttpError(403, "the group's manager only");
   }
+}
+
+/** A group's icon is set by its initiative's supervisors (a manager who isn't one can't) */
+async function requireSupervisorOfGroup(db: D1Database, actor: Actor, groupId: string) {
+  const group = await db
+    .prepare("SELECT initiative_id FROM groups WHERE id = ?")
+    .bind(groupId)
+    .first<{ initiative_id: string }>();
+  if (!group) throw new HttpError(403, "not your group");
+  await requireSupervisorOf(db, actor, group.initiative_id);
 }
 
 async function memberGroup(db: D1Database, memberId: string): Promise<string> {
@@ -584,7 +594,7 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "imageSet": {
-      await requireManagerOf(db, actor, op.id);
+      await requireSupervisorOfGroup(db, actor, op.id);
       if (op.image !== null) checkImage(op.image);
       // Removing the icon also resets the option; a new upload keeps it unless told otherwise
       const version = op.image === null ? null : crypto.randomUUID().slice(0, 8);
@@ -600,7 +610,7 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "imagePlain":
-      await requireManagerOf(db, actor, op.id);
+      await requireSupervisorOfGroup(db, actor, op.id);
       await db
         .prepare("UPDATE groups SET icon_plain = ? WHERE id = ?")
         .bind(op.plain ? 1 : 0, op.id)

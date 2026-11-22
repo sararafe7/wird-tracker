@@ -55,3 +55,8 @@ export function dayTheme(theme: ShareTheme, date: string): DayTheme {
   const n = theme.days.length;
   return DAY_THEMES[theme.days[((day % n) + n) % n]];
 }
+
+/** The group's deep colour today: the dark circle behind light logos inside the app */
+export function groupDeep(group: { audience: Audience }, today: string): string {
+  return dayTheme(SHARE_THEMES[group.audience], today).deep;
+}

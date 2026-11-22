@@ -13,11 +13,11 @@ import {
   Table2,
   Trash2,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Guide } from "@/components/guide";
 import { ImagePicker, Thumb } from "@/components/images";
 import MemberHistory from "@/components/MemberHistory";
-import { SHARE_THEMES } from "@/components/theme";
+import { groupDeep, SHARE_THEMES } from "@/components/theme";
 import { copyText, fill, inputClass, SpanText, type Strings } from "@/components/ui";
 import { downloadBackup } from "@/lib/backup";
 import { newId } from "@/lib/id";
@@ -81,6 +81,13 @@ export default function GroupBoard({
   onWeek,
 }: Props) {
   const [form, setForm] = useState<FormState | null>(null);
+  const formKey = form ? (form.id ?? "new") : null;
+  useEffect(() => {
+    if (formKey)
+      document
+        .getElementById("member-form")
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [formKey]);
   const [picker, setPicker] = useState<string | null>(null);
   const [history, setHistory] = useState<Member | null>(null);
   const [custom, setCustom] = useState("");
@@ -96,6 +103,10 @@ export default function GroupBoard({
   // Members: the manager and the supervisors. Daily work: the group's manager only (isGroupManager)
   const canManage = canManageMembers(data, group);
   const manager = isGroupManager(data, group);
+  // The initiative's supervisors set the group's icon
+  const supervisor =
+    data.initiatives.find((i) => i.id === group.initiativeId)?.role === "supervisor";
+  const dark = groupDeep(group, today);
   const theme = SHARE_THEMES[group.audience];
 
   function record(m: Member, value: number | null) {
@@ -188,6 +199,71 @@ export default function GroupBoard({
   const monthEnd = `${date.slice(0, 7)}-31`;
   const doneCount = members.filter((m) => dayView(m, records, date).record).length;
 
+  // Editing a member opens the form in place of her card; adding one opens it under the list
+  const memberForm = form && (
+    <form id="member-form" onSubmit={submit} className="card scroll-mt-4 space-y-4">
+      <h2 className="text-lg font-semibold">
+        {form.id ? t["form.edit_title"] : t["form.add_title"]}
+      </h2>
+      <label className="block space-y-1">
+        <span className="text-sm font-medium">{t["form.name"]}</span>
+        <input
+          required
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          className={inputClass}
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">{t["form.daily"]}</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={TOTAL_PAGES}
+            required
+            value={form.daily}
+            onChange={(e) => setForm({ ...form, daily: e.target.value })}
+            className={inputClass}
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">{t["form.start"]}</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={TOTAL_PAGES}
+            required
+            value={form.startPage}
+            onChange={(e) => setForm({ ...form, startPage: e.target.value })}
+            className={inputClass}
+          />
+        </label>
+      </div>
+      <p className="text-xs text-stone-500">{t["form.start_hint"]}</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className="btn-primary flex-1">
+          {t["common.save"]}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => setForm(null)}>
+          {t["common.cancel"]}
+        </button>
+        {form.id && (
+          <button
+            type="button"
+            className="btn-secondary text-red-700"
+            onClick={() => form.id && remove(form.id)}
+            aria-label={t["form.delete"]}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    </form>
+  );
+
   return (
     <div className="space-y-4">
       <button
@@ -203,7 +279,13 @@ export default function GroupBoard({
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-              <Thumb id={group.id} version={group.icon} className="h-9 w-9" />
+              <Thumb
+                id={group.id}
+                version={group.icon}
+                plain={group.iconPlain}
+                dark={dark}
+                className="h-9 w-9"
+              />
               <span className="truncate">{group.name}</span>
             </h1>
             <p className="text-sm text-stone-500">
@@ -301,12 +383,7 @@ export default function GroupBoard({
           t={t}
           id={`group-${group.id}`}
           empty={members.length === 0}
-          steps={[
-            t["guide.manager_step1"],
-            t["guide.manager_step2"],
-            t["guide.manager_step3"],
-            t["guide.manager_step4"],
-          ]}
+          steps={[t["guide.manager_step1"], t["guide.manager_step2"], t["guide.manager_step3"]]}
         />
       )}
 
@@ -330,6 +407,7 @@ export default function GroupBoard({
           const done = v.record !== null;
           const month = stats(records, m.id, monthStart, monthEnd);
           const k = khatmat(m, records);
+          if (form?.id === m.id) return <li key={m.id}>{memberForm}</li>;
           return (
             <li
               key={m.id}
@@ -578,78 +656,17 @@ export default function GroupBoard({
         </button>
       )}
 
-      {form && (
-        <form onSubmit={submit} className="card space-y-4">
-          <h2 className="text-lg font-semibold">
-            {form.id ? t["form.edit_title"] : t["form.add_title"]}
-          </h2>
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">{t["form.name"]}</span>
-            <input
-              required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block space-y-1">
-              <span className="text-sm font-medium">{t["form.daily"]}</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={TOTAL_PAGES}
-                required
-                value={form.daily}
-                onChange={(e) => setForm({ ...form, daily: e.target.value })}
-                className={inputClass}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-sm font-medium">{t["form.start"]}</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                max={TOTAL_PAGES}
-                required
-                value={form.startPage}
-                onChange={(e) => setForm({ ...form, startPage: e.target.value })}
-                className={inputClass}
-              />
-            </label>
-          </div>
-          <p className="text-xs text-stone-500">{t["form.start_hint"]}</p>
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className="btn-primary flex-1">
-              {t["common.save"]}
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setForm(null)}>
-              {t["common.cancel"]}
-            </button>
-            {form.id && (
-              <button
-                type="button"
-                className="btn-secondary text-red-700"
-                onClick={() => form.id && remove(form.id)}
-                aria-label={t["form.delete"]}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
-          </div>
-        </form>
-      )}
+      {form && !form.id && memberForm}
 
       {canManage && !form && !reorder && (
         <section className="card space-y-4 !p-4">
-          {manager && (
+          {supervisor && (
             <ImagePicker
               t={t}
               id={group.id}
               version={group.icon}
               plain={group.iconPlain}
+              dark={dark}
               label={t["image.group_label"]}
               apply={apply}
             />

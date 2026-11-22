@@ -18,6 +18,7 @@ import GroupWeek from "@/components/GroupWeek";
 import { Guide } from "@/components/guide";
 import { Thumb } from "@/components/images";
 import { InstallTip } from "@/components/InstallTip";
+import { groupDeep } from "@/components/theme";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
 import { ApiError, fetchSession, fetchSummaries, type Session, sendOp } from "@/lib/api";
 import { getSignOutUrl } from "@/lib/auth";
@@ -295,6 +296,14 @@ function InitiativeSection({
   today: string;
 }) {
   const [groupForm, setGroupForm] = useState<GroupForm | null>(null);
+  const groupFormKey = groupForm ? (groupForm.id ?? "new") : null;
+  useEffect(() => {
+    if (groupFormKey) {
+      document
+        .getElementById(`group-form-${initiative.id}`)
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [groupFormKey, initiative.id]);
   const [renaming, setRenaming] = useState(false);
   const supervisor = initiative.role === "supervisor";
   const groups = initiativeGroups(data, initiative.id);
@@ -348,6 +357,116 @@ function InitiativeSection({
     setGroupForm(null);
   }
 
+  // Editing a group opens its settings in place of its card; a new group's form opens below
+  const groupFormEl = groupForm && (
+    <form
+      id={`group-form-${initiative.id}`}
+      onSubmit={saveGroup}
+      className="card scroll-mt-4 space-y-4"
+    >
+      <h2 className="text-lg font-semibold">
+        {groupForm.id ? t["groups.edit_title"] : t["groups.add"]}
+      </h2>
+      <label className="block space-y-1">
+        <span className="text-sm font-medium">{t["groups.name"]}</span>
+        <input
+          required
+          value={groupForm.name}
+          onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
+          className={inputClass}
+        />
+      </label>
+      <div className="space-y-2">
+        <label className="block space-y-1">
+          <span className="text-sm font-medium">{t["groups.manager"]}</span>
+          <select
+            value={groupForm.manager}
+            onChange={(e) => setGroupForm({ ...groupForm, manager: e.target.value })}
+            className={inputClass}
+          >
+            <option value="">{t["groups.no_manager"]}</option>
+            {candidates.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === data.me.staffId ? `${p.name} (${t["staff.you"]})` : p.name}
+              </option>
+            ))}
+            <option value={NEW_MANAGER}>{t["groups.manager_new"]}</option>
+          </select>
+        </label>
+        {groupForm.manager === NEW_MANAGER && (
+          <>
+            <input
+              required
+              value={groupForm.newName}
+              onChange={(e) => setGroupForm({ ...groupForm, newName: e.target.value })}
+              placeholder={t["staff.name_placeholder"]}
+              aria-label={t["staff.name_placeholder"]}
+              className={inputClass}
+            />
+            <input
+              required
+              type="email"
+              dir="ltr"
+              value={groupForm.newEmail}
+              onChange={(e) => setGroupForm({ ...groupForm, newEmail: e.target.value })}
+              placeholder={t["staff.email_placeholder"]}
+              aria-label={t["staff.email_placeholder"]}
+              className={cn(inputClass, "text-end")}
+            />
+          </>
+        )}
+        <p className="text-xs text-stone-500">{t["groups.manager_hint"]}</p>
+      </div>
+      <fieldset className="space-y-1">
+        <legend className="text-sm font-medium">{t["groups.audience"]}</legend>
+        <div className="flex gap-2">
+          {AUDIENCES.map((a) => (
+            <label
+              key={a}
+              className={cn(
+                "flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm",
+                groupForm.audience === a
+                  ? "border-hasanat bg-hasanat/5 font-medium text-hasanat-dark"
+                  : "border-stone-200 text-slate-700",
+              )}
+            >
+              <input
+                type="radio"
+                name={`audience-${initiative.id}`}
+                value={a}
+                checked={groupForm.audience === a}
+                onChange={() => setGroupForm({ ...groupForm, audience: a })}
+                className="sr-only"
+              />
+              {t[`audience.${a}`]}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className="btn-primary flex-1">
+          {t["common.save"]}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => setGroupForm(null)}>
+          {t["common.cancel"]}
+        </button>
+        {groupForm.id && (
+          <button
+            type="button"
+            className="btn-secondary w-full text-red-700"
+            onClick={() => {
+              const g = groups.find((x) => x.id === groupForm.id);
+              if (g) removeGroup(g);
+            }}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+            {t["groups.delete"]}
+          </button>
+        )}
+      </div>
+    </form>
+  );
+
   return (
     <section className="space-y-3" aria-labelledby={`initiative-${initiative.id}`}>
       {renaming ? (
@@ -395,7 +514,7 @@ function InitiativeSection({
               id={initiative.id}
               empty={groups.length === 0}
               emptyText={t["groups.empty_supervisor"]}
-              steps={[t["guide.step1"], t["guide.step2"], t["guide.step3"]]}
+              steps={[t["guide.step1"], t["guide.step2"], t["guide.step3"], t["guide.step4"]]}
             />
           ) : (
             groups.length === 0 && (
@@ -404,16 +523,20 @@ function InitiativeSection({
           )}
           {supervisor && (
             <ul className="space-y-2">
-              {groups.map((g) => (
-                <GroupCard
-                  key={g.id}
-                  t={t}
-                  data={data}
-                  group={g}
-                  today={today}
-                  onEdit={() => edit(g)}
-                />
-              ))}
+              {groups.map((g) =>
+                groupForm?.id === g.id ? (
+                  <li key={g.id}>{groupFormEl}</li>
+                ) : (
+                  <GroupCard
+                    key={g.id}
+                    t={t}
+                    data={data}
+                    group={g}
+                    today={today}
+                    onEdit={() => edit(g)}
+                  />
+                ),
+              )}
             </ul>
           )}
           {supervisor && groups.length > 0 && <StatusLegend t={t} />}
@@ -428,7 +551,13 @@ function InitiativeSection({
                     className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white"
                   >
                     <a href={`#/g/${g.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
-                      <Thumb id={g.id} version={g.icon} className="h-10 w-10" />
+                      <Thumb
+                        id={g.id}
+                        version={g.icon}
+                        plain={g.iconPlain}
+                        dark={groupDeep(g, today)}
+                        className="h-10 w-10"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-slate-900">{g.name}</p>
                         <p className="text-sm text-stone-500">
@@ -469,110 +598,7 @@ function InitiativeSection({
             </button>
           )}
 
-          {supervisor && groupForm && (
-            <form onSubmit={saveGroup} className="card space-y-4">
-              <h2 className="text-lg font-semibold">
-                {groupForm.id ? t["groups.edit_title"] : t["groups.add"]}
-              </h2>
-              <label className="block space-y-1">
-                <span className="text-sm font-medium">{t["groups.name"]}</span>
-                <input
-                  required
-                  value={groupForm.name}
-                  onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-                  className={inputClass}
-                />
-              </label>
-              <div className="space-y-2">
-                <label className="block space-y-1">
-                  <span className="text-sm font-medium">{t["groups.manager"]}</span>
-                  <select
-                    value={groupForm.manager}
-                    onChange={(e) => setGroupForm({ ...groupForm, manager: e.target.value })}
-                    className={inputClass}
-                  >
-                    <option value="">{t["groups.no_manager"]}</option>
-                    {candidates.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.id === data.me.staffId ? `${p.name} (${t["staff.you"]})` : p.name}
-                      </option>
-                    ))}
-                    <option value={NEW_MANAGER}>{t["groups.manager_new"]}</option>
-                  </select>
-                </label>
-                {groupForm.manager === NEW_MANAGER && (
-                  <>
-                    <input
-                      required
-                      value={groupForm.newName}
-                      onChange={(e) => setGroupForm({ ...groupForm, newName: e.target.value })}
-                      placeholder={t["staff.name_placeholder"]}
-                      aria-label={t["staff.name_placeholder"]}
-                      className={inputClass}
-                    />
-                    <input
-                      required
-                      type="email"
-                      dir="ltr"
-                      value={groupForm.newEmail}
-                      onChange={(e) => setGroupForm({ ...groupForm, newEmail: e.target.value })}
-                      placeholder={t["staff.email_placeholder"]}
-                      aria-label={t["staff.email_placeholder"]}
-                      className={cn(inputClass, "text-end")}
-                    />
-                  </>
-                )}
-                <p className="text-xs text-stone-500">{t["groups.manager_hint"]}</p>
-              </div>
-              <fieldset className="space-y-1">
-                <legend className="text-sm font-medium">{t["groups.audience"]}</legend>
-                <div className="flex gap-2">
-                  {AUDIENCES.map((a) => (
-                    <label
-                      key={a}
-                      className={cn(
-                        "flex-1 cursor-pointer rounded-lg border px-3 py-2 text-center text-sm",
-                        groupForm.audience === a
-                          ? "border-hasanat bg-hasanat/5 font-medium text-hasanat-dark"
-                          : "border-stone-200 text-slate-700",
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name={`audience-${initiative.id}`}
-                        value={a}
-                        checked={groupForm.audience === a}
-                        onChange={() => setGroupForm({ ...groupForm, audience: a })}
-                        className="sr-only"
-                      />
-                      {t[`audience.${a}`]}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <div className="flex flex-wrap gap-2">
-                <button type="submit" className="btn-primary flex-1">
-                  {t["common.save"]}
-                </button>
-                <button type="button" className="btn-secondary" onClick={() => setGroupForm(null)}>
-                  {t["common.cancel"]}
-                </button>
-                {groupForm.id && (
-                  <button
-                    type="button"
-                    className="btn-secondary w-full text-red-700"
-                    onClick={() => {
-                      const g = groups.find((x) => x.id === groupForm.id);
-                      if (g) removeGroup(g);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    {t["groups.delete"]}
-                  </button>
-                )}
-              </div>
-            </form>
-          )}
+          {supervisor && groupForm && !groupForm.id && groupFormEl}
 
           {supervisor && groups.length > 0 && (
             <SendsGrid t={t} data={data} groups={groups} today={today} />
@@ -664,7 +690,13 @@ function GroupCard({
     <li className="flex items-stretch overflow-hidden rounded-2xl border border-slate-100 bg-white">
       <span className={cn("w-1.5 shrink-0", STATUS_BAR[h.status])} aria-hidden="true" />
       <a href={`#/g/${group.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
-        <Thumb id={group.id} version={group.icon} className="h-11 w-11" />
+        <Thumb
+          id={group.id}
+          version={group.icon}
+          plain={group.iconPlain}
+          dark={groupDeep(group, today)}
+          className="h-11 w-11"
+        />
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="truncate font-semibold text-slate-900">
             {group.name}

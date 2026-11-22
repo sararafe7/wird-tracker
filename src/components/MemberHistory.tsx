@@ -50,6 +50,11 @@ export default function MemberHistory({ t, member, records, onClose }: Props) {
               {reached !== null && <span>{fill(t["history.reached"], { n: reached })}</span>}
               <span>{fill(t["history.next"], { n: next })}</span>
               <span>{fill(t["wird.khatmat"], { n: khatmat(member, records) })}</span>
+              <span>
+                {fill(t["history.total_days"], {
+                  n: records.filter((r) => r.memberId === member.id).length,
+                })}
+              </span>
             </p>
           </div>
           <button

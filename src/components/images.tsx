@@ -38,48 +38,84 @@ async function loadImage(file: File): Promise<HTMLImageElement> {
   }
 }
 
-/**
- * Fit the picture inside a 256px square (nothing cropped) and compress it under 50 KB,
- * on the phone, before it is uploaded. WebP keeps transparency; browsers that can't
- * encode WebP (older iPhones) get JPEG on white.
- */
-export async function shrinkImage(file: File): Promise<string> {
-  const img = await loadImage(file);
-  const scale = Math.min(SIZE / img.naturalWidth, SIZE / img.naturalHeight, 1);
+/** The picture fitted inside a square canvas, nothing cropped, on a transparent background */
+function drawSquare(img: HTMLImageElement, size: number): HTMLCanvasElement {
+  const scale = Math.min(size / img.naturalWidth, size / img.naturalHeight, 1);
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
   const h = Math.max(1, Math.round(img.naturalHeight * scale));
   const canvas = document.createElement("canvas");
-  canvas.width = SIZE;
-  canvas.height = SIZE;
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("no canvas");
-  for (const type of ["image/webp", "image/jpeg"]) {
-    ctx.clearRect(0, 0, SIZE, SIZE);
-    if (type === "image/jpeg") {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, SIZE, SIZE);
+  ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+  return canvas;
+}
+
+function hasTransparency(canvas: HTMLCanvasElement): boolean {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return true;
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (let i = 3; i < data.length; i += 4) if (data[i] < 255) return true;
+  return false;
+}
+
+/**
+ * Fit the picture inside a 256px square (nothing cropped) and compress it under 50 KB, on the
+ * phone, before it is uploaded. Transparency is always kept: WebP first; browsers that can't
+ * encode WebP (some iPhones) get PNG, smaller if needed. Only a fully opaque picture may become
+ * JPEG, so a light logo never ends up on a white square.
+ */
+export async function shrinkImage(file: File): Promise<string> {
+  const img = await loadImage(file);
+  const canvas = drawSquare(img, SIZE);
+  for (const quality of [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]) {
+    const blob = await canvasBlob(canvas, "image/webp", quality);
+    if (!blob || blob.type !== "image/webp") break; // this browser can't encode WebP
+    if (blob.size <= TARGET_BYTES) return dataUrl(blob);
+  }
+  if (hasTransparency(canvas)) {
+    for (const size of [256, 224, 192, 160, 128, 96]) {
+      const blob = await canvasBlob(drawSquare(img, size), "image/png", 1);
+      if (blob && blob.size <= TARGET_BYTES) return dataUrl(blob);
     }
-    ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+  } else {
     for (const quality of [0.9, 0.8, 0.7, 0.6, 0.5, 0.4]) {
-      const blob = await canvasBlob(canvas, type, quality);
-      if (!blob || blob.type !== type) break; // this browser can't encode it
-      if (blob.size <= TARGET_BYTES) return dataUrl(blob);
+      const blob = await canvasBlob(canvas, "image/jpeg", quality);
+      if (blob && blob.type === "image/jpeg" && blob.size <= TARGET_BYTES) return dataUrl(blob);
     }
   }
   throw new Error("image too large after compression");
 }
 
-/** A group's icon; nothing when there is none */
+/**
+ * A group's icon; nothing when there is none. An icon marked «بدون دائرة» (a light logo) sits on a
+ * dark circle in the group's colour of the day, so its light parts stay visible on white.
+ */
 export function Thumb({
   id,
   version,
   className,
+  plain = false,
+  dark,
 }: {
   id: string;
   version: string | null;
   className?: string;
+  plain?: boolean;
+  dark?: string; // the dark circle's colour, for plain icons
 }) {
   if (!version) return null;
+  if (plain) {
+    return (
+      <span
+        className={cn("flex shrink-0 items-center justify-center rounded-full p-1", className)}
+        style={{ backgroundColor: dark }}
+      >
+        <img src={imageUrl(id, version)} alt="" className="h-full w-full object-contain" />
+      </span>
+    );
+  }
   return (
     <img
       src={imageUrl(id, version)}
@@ -89,12 +125,13 @@ export function Thumb({
   );
 }
 
-/** Upload, replace or remove a group's icon (its manager only) */
+/** Upload, replace or remove a group's icon (its initiative's supervisors only) */
 export function ImagePicker({
   t,
   id,
   version,
   plain,
+  dark,
   label,
   apply,
 }: {
@@ -102,6 +139,7 @@ export function ImagePicker({
   id: string;
   version: string | null;
   plain: boolean;
+  dark: string;
   label: string;
   apply: (op: Op) => void;
 }) {
@@ -127,7 +165,13 @@ export function ImagePicker({
   return (
     <div className="flex items-center gap-3">
       {version ? (
-        <Thumb id={id} version={version} className="h-14 w-14 border" />
+        <Thumb
+          id={id}
+          version={version}
+          plain={plainNow}
+          dark={dark}
+          className={cn("h-14 w-14", !plainNow && "border")}
+        />
       ) : (
         <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-dashed border-stone-300 text-stone-400">
           <ImagePlus className="h-6 w-6" aria-hidden="true" />
