@@ -117,7 +117,10 @@ export default function GroupWeek({ t, data, group, today, onClose }: Props) {
         </div>
       </div>
 
-      <nav className="sticky bottom-0 flex items-center justify-center gap-2 bg-[var(--page)]/95 px-3 py-3">
+      <nav
+        data-share-nav
+        className="sticky bottom-0 flex items-center justify-center gap-2 bg-[var(--page)]/95 px-3 py-3"
+      >
         <button
           type="button"
           onClick={() => setStart(addDays(start, -7))}

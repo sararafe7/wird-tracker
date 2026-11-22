@@ -36,5 +36,29 @@ const siteName = t("site.name");
   </head>
   <body class="min-h-screen flex flex-col">
     <slot />
+    <!-- Ishara reviewer notes: shows only for reviewers who open the site with a reviewer link -->
+    <script is:inline src="https://useishara.com/w.js" data-site="pk_nfchnhrg3br2yfed5j48" defer></script>
+    <script is:inline>
+      // When Ishara shows its reviewer button (reviewers only), make room for it at the bottom
+      // (see [data-reviewing] in global.css); other visitors get no change.
+      (() => {
+        const check = (host) => {
+          const button = host.shadowRoot && host.shadowRoot.querySelector(".ishara-launch");
+          const shown = !!button && !button.hidden && button.getClientRects().length > 0;
+          document.documentElement.toggleAttribute("data-reviewing", shown);
+        };
+        new MutationObserver((_, watcher) => {
+          const host = document.querySelector("[data-ishara]");
+          if (!host || !host.shadowRoot) return;
+          watcher.disconnect();
+          new MutationObserver(() => check(host)).observe(host.shadowRoot, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+          });
+          check(host);
+        }).observe(document.body, { childList: true });
+      })();
+    </script>
   </body>
 </html>

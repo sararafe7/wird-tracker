@@ -37,3 +37,13 @@
     @apply bg-white rounded-2xl shadow-sm border border-slate-100 p-6;
   }
 }
+
+/* Ishara's reviewer button sits in a bottom corner above everything. When it shows (reviewers only,
+   see Layout.astro), leave room so it never covers the last buttons of a page or the screenshot views'
+   bottom buttons. */
+html[data-reviewing] body {
+  padding-bottom: 84px;
+}
+html[data-reviewing] [data-share-nav] {
+  padding-bottom: 84px;
+}

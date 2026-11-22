@@ -167,7 +167,7 @@ export default function GroupTable({ t, data, group, today, apply, onClose }: Pr
         </div>
       </div>
 
-      <nav className="sticky bottom-0 bg-[var(--page)]/95 px-3 py-3">
+      <nav data-share-nav className="sticky bottom-0 bg-[var(--page)]/95 px-3 py-3">
         {manager && (
           <div className="mx-auto mb-2 flex max-w-md justify-center">
             {sentToday ? (
