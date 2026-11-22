@@ -2,12 +2,14 @@ import type { APIRoute } from "astro";
 import { json, resolveActor } from "@/lib/api-context";
 import { loadImage } from "@/lib/server";
 
-/** A group's icon, for people who may see it (checked in loadImage) */
+/** An initiative's image, for people who may see it (checked in loadImage) */
 export const GET: APIRoute = async ({ locals, url, params }) => {
   const ctx = await resolveActor(locals, url);
   if ("response" in ctx) return ctx.response;
   const image =
-    params.target === "group" && params.id ? await loadImage(ctx.db, ctx.actor, params.id) : null;
+    params.target === "initiative" && params.id
+      ? await loadImage(ctx.db, ctx.actor, params.id)
+      : null;
   if (!image) return json({ error: "not found" }, 404);
   return new Response(image.bytes, {
     headers: {

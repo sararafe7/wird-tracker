@@ -32,6 +32,8 @@ export interface Initiative {
   role: Role;
   suspended: boolean; // closed by an app admin; nothing inside it is sent
   supervisorIds: string[]; // only filled in for initiatives she supervises
+  logo: string | null; // version of its image, or null for none
+  logoPlain: boolean; // shown without the tinted circle on screenshot headers
 }
 
 /** What app admins see of every initiative: no member names or records */
@@ -56,8 +58,6 @@ export interface Group {
   name: string;
   managerId: string | null;
   audience: Audience;
-  icon: string | null; // version of its icon, or null for none
-  iconPlain: boolean; // shown without the tinted circle on screenshot headers
   createdAt: string; // YYYY-MM-DD
 }
 
@@ -87,9 +87,9 @@ export interface TableSend {
   date: string;
 }
 
-/** Group icons are served separately, so the data stays small; the version makes each URL cacheable */
-export function imageUrl(groupId: string, version: string): string {
-  return `/api/image/group/${encodeURIComponent(groupId)}?v=${version}`;
+/** Initiative images are served separately, so the data stays small; the version makes each URL cacheable */
+export function imageUrl(initiativeId: string, version: string): string {
+  return `/api/image/initiative/${encodeURIComponent(initiativeId)}?v=${version}`;
 }
 
 export function initiativeGroups(data: Data, initiativeId: string): Group[] {

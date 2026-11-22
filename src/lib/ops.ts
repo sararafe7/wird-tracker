@@ -57,11 +57,11 @@ export const opSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("initiativeCreate"), id, name }),
   // Its supervisors, or any app admin
   z.object({ type: z.literal("initiativeRename"), id, name }),
-  // A group's icon, set by its initiative's supervisors only;
+  // An initiative's image, set by its supervisors only;
   // null removes it. Resized on the phone; the server checks the bytes too.
   z.object({
     type: z.literal("imageSet"),
-    id, // the group
+    id, // the initiative
     image: z
       .string()
       .max(IMAGE_MAX_DATA_URL)
@@ -73,7 +73,7 @@ export const opSchema = z.discriminatedUnion("type", [
   // The same option for an image already uploaded
   z.object({
     type: z.literal("imagePlain"),
-    id, // the group
+    id, // the initiative
     plain: z.boolean(),
   }),
   // «أرسلتُ الجدول ✓», or undone with sent: false; the group's manager only

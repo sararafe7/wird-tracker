@@ -5,7 +5,7 @@ import { imageUrl } from "@/lib/store";
 
 /**
  * Pieces shared by the screenshot views (the daily table and the weekly card), so both follow
- * the same design: El Messiri, the day's colour theme, drawn icons, and the group icon's circle.
+ * the same design: El Messiri, the day's colour theme, drawn icons, and the initiative image's circle.
  */
 
 const FONT_ID = "font-el-messiri";
@@ -80,7 +80,7 @@ export function Crescent({ label, legend }: { label: string; legend?: boolean })
 }
 
 /**
- * The group icon in a circle of the day's tint with a thin white ring (transparent images
+ * The initiative's image in a circle of the day's tint with a thin white ring (transparent images
  * show the tint through), or straight on the header when the image asks for no circle.
  * An empty space of the same size keeps the title centred.
  */

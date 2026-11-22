@@ -15,9 +15,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Guide } from "@/components/guide";
-import { ImagePicker, Thumb } from "@/components/images";
 import MemberHistory from "@/components/MemberHistory";
-import { groupDeep, SHARE_THEMES } from "@/components/theme";
+import { SHARE_THEMES } from "@/components/theme";
 import { copyText, fill, inputClass, SpanText, type Strings } from "@/components/ui";
 import { downloadBackup } from "@/lib/backup";
 import { newId } from "@/lib/id";
@@ -103,10 +102,6 @@ export default function GroupBoard({
   // Members: the manager and the supervisors. Daily work: the group's manager only (isGroupManager)
   const canManage = canManageMembers(data, group);
   const manager = isGroupManager(data, group);
-  // The initiative's supervisors set the group's icon
-  const supervisor =
-    data.initiatives.find((i) => i.id === group.initiativeId)?.role === "supervisor";
-  const dark = groupDeep(group, today);
   const theme = SHARE_THEMES[group.audience];
 
   function record(m: Member, value: number | null) {
@@ -279,13 +274,6 @@ export default function GroupBoard({
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-              <Thumb
-                id={group.id}
-                version={group.icon}
-                plain={group.iconPlain}
-                dark={dark}
-                className="h-9 w-9"
-              />
               <span className="truncate">{group.name}</span>
             </h1>
             <p className="text-sm text-stone-500">
@@ -660,17 +648,6 @@ export default function GroupBoard({
 
       {canManage && !form && !reorder && (
         <section className="card space-y-4 !p-4">
-          {supervisor && (
-            <ImagePicker
-              t={t}
-              id={group.id}
-              version={group.icon}
-              plain={group.iconPlain}
-              dark={dark}
-              label={t["image.group_label"]}
-              apply={apply}
-            />
-          )}
           <button
             type="button"
             className="btn-secondary w-full !py-2 text-sm"

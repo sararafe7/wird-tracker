@@ -16,7 +16,7 @@ import GroupBoard from "@/components/GroupBoard";
 import GroupTable from "@/components/GroupTable";
 import GroupWeek from "@/components/GroupWeek";
 import { Guide } from "@/components/guide";
-import { Thumb } from "@/components/images";
+import { ImagePicker, Thumb } from "@/components/images";
 import { InstallTip } from "@/components/InstallTip";
 import { groupDeep } from "@/components/theme";
 import { audienceStrings, fill, inputClass, type Strings } from "@/components/ui";
@@ -307,6 +307,8 @@ function InitiativeSection({
   const [renaming, setRenaming] = useState(false);
   const supervisor = initiative.role === "supervisor";
   const groups = initiativeGroups(data, initiative.id);
+  // The dark circle behind a «بدون دائرة» image: today's colour of the initiative's (first) groups
+  const dark = groupDeep({ audience: groups[0]?.audience ?? "girls" }, today);
 
   // People a supervisor can pick as a group's manager: this initiative's supervisors and managers
   const candidates: Person[] = data.people.filter(
@@ -486,6 +488,13 @@ function InitiativeSection({
             id={`initiative-${initiative.id}`}
             className="flex min-w-0 items-center gap-2 text-2xl font-bold text-slate-900"
           >
+            <Thumb
+              id={initiative.id}
+              version={initiative.logo}
+              plain={initiative.logoPlain}
+              dark={dark}
+              className="h-9 w-9"
+            />
             <span className="truncate">{initiative.name}</span>
           </h1>
           <span className="flex shrink-0 items-center gap-1 text-sm text-stone-500">
@@ -551,13 +560,6 @@ function InitiativeSection({
                     className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white"
                   >
                     <a href={`#/g/${g.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
-                      <Thumb
-                        id={g.id}
-                        version={g.icon}
-                        plain={g.iconPlain}
-                        dark={groupDeep(g, today)}
-                        className="h-10 w-10"
-                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-slate-900">{g.name}</p>
                         <p className="text-sm text-stone-500">
@@ -618,6 +620,15 @@ function InitiativeSection({
                 <Download className="h-4 w-4" aria-hidden="true" />
                 {t["backup.initiative_button"]}
               </button>
+              <ImagePicker
+                t={t}
+                id={initiative.id}
+                version={initiative.logo}
+                plain={initiative.logoPlain}
+                dark={dark}
+                label={t["image.initiative_label"]}
+                apply={apply}
+              />
               <DeleteInitiative t={t} initiative={initiative} apply={apply} />
             </div>
           )}
@@ -690,13 +701,6 @@ function GroupCard({
     <li className="flex items-stretch overflow-hidden rounded-2xl border border-slate-100 bg-white">
       <span className={cn("w-1.5 shrink-0", STATUS_BAR[h.status])} aria-hidden="true" />
       <a href={`#/g/${group.id}`} className="flex min-w-0 flex-1 items-center gap-3 p-4">
-        <Thumb
-          id={group.id}
-          version={group.icon}
-          plain={group.iconPlain}
-          dark={groupDeep(group, today)}
-          className="h-11 w-11"
-        />
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="truncate font-semibold text-slate-900">
             {group.name}

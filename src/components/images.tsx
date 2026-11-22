@@ -89,8 +89,8 @@ export async function shrinkImage(file: File): Promise<string> {
 }
 
 /**
- * A group's icon; nothing when there is none. An icon marked «بدون دائرة» (a light logo) sits on a
- * dark circle in the group's colour of the day, so its light parts stay visible on white.
+ * An initiative's image; nothing when there is none. An image marked «بدون دائرة» (a light logo) sits
+ * on a dark circle in today's colour, so its light parts stay visible on white.
  */
 export function Thumb({
   id,
@@ -125,7 +125,7 @@ export function Thumb({
   );
 }
 
-/** Upload, replace or remove a group's icon (its initiative's supervisors only) */
+/** Upload, replace or remove an initiative's image (its supervisors only) */
 export function ImagePicker({
   t,
   id,

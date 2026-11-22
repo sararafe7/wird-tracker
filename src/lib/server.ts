@@ -195,7 +195,7 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
   const [initiatives, links, people, groups, members, records, marks, sends, created] =
     await db.batch([
       q(
-        `SELECT i.id, i.name, i.status,
+        `SELECT i.id, i.name, i.status, i.logo_version, i.logo_plain,
          EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?1) AS sup
        FROM initiatives i
        WHERE EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?1)
@@ -214,7 +214,7 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
        ORDER BY created_at`,
       ),
       q(
-        "SELECT id, initiative_id, name, manager_id, audience, icon_version, icon_plain, created_at FROM vg ORDER BY created_at",
+        "SELECT id, initiative_id, name, manager_id, audience, created_at FROM vg ORDER BY created_at",
       ),
       q(
         `SELECT m.id, m.group_id, m.name, m.daily, m.start_page FROM members m
@@ -250,6 +250,9 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         role: i.sup ? "supervisor" : "manager",
         suspended: i.status !== "active",
         supervisorIds: supervisorIds(String(i.id)),
+        // Suspended initiatives send nothing inside, their image included
+        logo: i.logo_version && i.status === "active" ? String(i.logo_version) : null,
+        logoPlain: Boolean(i.logo_plain),
       }),
     ),
     people: rows(people).map(
@@ -267,8 +270,6 @@ export async function loadData(db: D1Database, actor: Actor): Promise<Data> {
         name: String(g.name),
         managerId: g.manager_id ? String(g.manager_id) : null,
         audience: g.audience === "boys" ? "boys" : "girls",
-        icon: g.icon_version ? String(g.icon_version) : null,
-        iconPlain: Boolean(g.icon_plain),
         createdAt: String(g.created_at).slice(0, 10),
       }),
     ),
@@ -352,22 +353,23 @@ function checkImage(dataUrl: string) {
 }
 
 /**
- * A group's icon, only for its manager and its initiative's supervisors, and never in a suspended
- * initiative. Anything else looks the same as no image.
+ * An initiative's image, for its supervisors and the managers of its groups (the people who open
+ * its tables), never in a suspended initiative. Anything else looks the same as no image.
  */
 export async function loadImage(
   db: D1Database,
   actor: Actor,
-  groupId: string,
+  initiativeId: string,
 ): Promise<{ mime: string; bytes: Uint8Array<ArrayBuffer> } | null> {
   if (!actor.staffId) return null;
   const row = await db
     .prepare(
-      `SELECT g.icon AS image FROM groups g JOIN initiatives i ON i.id = g.initiative_id
-       WHERE g.id = ?1 AND i.status = 'active' AND (g.manager_id = ?2 OR EXISTS (
-         SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = g.initiative_id AND s.staff_id = ?2))`,
+      `SELECT i.logo AS image FROM initiatives i
+       WHERE i.id = ?1 AND i.status = 'active' AND (
+         EXISTS (SELECT 1 FROM initiative_supervisors s WHERE s.initiative_id = i.id AND s.staff_id = ?2)
+         OR EXISTS (SELECT 1 FROM groups g WHERE g.initiative_id = i.id AND g.manager_id = ?2))`,
     )
-    .bind(groupId, actor.staffId)
+    .bind(initiativeId, actor.staffId)
     .first<{ image: string | null }>();
   return row?.image ? imageBytes(row.image) : null;
 }
@@ -418,16 +420,6 @@ async function requireManagerOf(db: D1Database, actor: Actor, groupId: string) {
   if ((await groupRole(db, actor, groupId)) !== "manager") {
     throw new HttpError(403, "the group's manager only");
   }
-}
-
-/** A group's icon is set by its initiative's supervisors (a manager who isn't one can't) */
-async function requireSupervisorOfGroup(db: D1Database, actor: Actor, groupId: string) {
-  const group = await db
-    .prepare("SELECT initiative_id FROM groups WHERE id = ?")
-    .bind(groupId)
-    .first<{ initiative_id: string }>();
-  if (!group) throw new HttpError(403, "not your group");
-  await requireSupervisorOf(db, actor, group.initiative_id);
 }
 
 async function memberGroup(db: D1Database, memberId: string): Promise<string> {
@@ -594,15 +586,16 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "imageSet": {
-      await requireSupervisorOfGroup(db, actor, op.id);
+      // The initiative's image: its supervisors only
+      await requireSupervisorOf(db, actor, op.id);
       if (op.image !== null) checkImage(op.image);
-      // Removing the icon also resets the option; a new upload keeps it unless told otherwise
+      // Removing the image also resets the option; a new upload keeps it unless told otherwise
       const version = op.image === null ? null : crypto.randomUUID().slice(0, 8);
       const plain = op.plain === undefined ? null : op.plain ? 1 : 0;
       await db
         .prepare(
-          `UPDATE groups SET icon = ?1, icon_version = ?2,
-             icon_plain = CASE WHEN ?1 IS NULL THEN 0 ELSE COALESCE(?3, icon_plain) END
+          `UPDATE initiatives SET logo = ?1, logo_version = ?2,
+             logo_plain = CASE WHEN ?1 IS NULL THEN 0 ELSE COALESCE(?3, logo_plain) END
            WHERE id = ?4`,
         )
         .bind(op.image, version, plain, op.id)
@@ -610,9 +603,9 @@ export async function runOp(db: D1Database, actor: Actor, op: Op): Promise<void>
       return;
     }
     case "imagePlain":
-      await requireSupervisorOfGroup(db, actor, op.id);
+      await requireSupervisorOf(db, actor, op.id);
       await db
-        .prepare("UPDATE groups SET icon_plain = ? WHERE id = ?")
+        .prepare("UPDATE initiatives SET logo_plain = ? WHERE id = ?")
         .bind(op.plain ? 1 : 0, op.id)
         .run();
       return;
